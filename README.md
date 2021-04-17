@@ -15,7 +15,7 @@ Multiple versions of typescript/tslib/Imploder for different controlled projects
 
 ## Configuration
 
-There are [test directory](ts/tests/) that contains configuration examples.  
+There is [test directory](ts/tests/) that contains configuration examples.  
 Also there is [type definitions](ts/src/types.ts) that are thoroughly commented and therefore can be used as documentation.  
 
 ### Configuration example
