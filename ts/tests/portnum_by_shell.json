@@ -1,0 +1,25 @@
+{
+	"projects": [{
+		"name": "Summator",
+		"imploderProject": "./summator/tsconfig.json",
+		"launchCommand": ["{node}", "{bundle}", "Result: "],
+		"proxyHttpPort": {
+			"shell": "cat summator_config.json | grep -P '\\d+' -o"
+		},
+		"imploderDevelopmentProfileName": "dev",
+		"restartCondition": [{
+			"proxyUrlRegexp": "^/restart_on_delete($|/|\\?)",
+			"method": "DELETE"
+		}, {
+			"proxyUrlRegexp": "^/restart($|/|\\?)"
+		}],
+		"launchCompletedCondition": {
+			"stdioParsingRegexp": "Started on port ",
+			"stderr": true
+		},
+		"projectHttpPort": {
+			"stdioParsingRegexp": "on port (\\d+)",
+			"stderr": true
+		}
+	}]
+}

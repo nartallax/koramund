@@ -1,0 +1,41 @@
+{
+	"projects": [{
+		"name": "Summator",
+		"imploderProject": "./summator/tsconfig.json",
+		"launchCommand": ["{node}", "{bundle}", "Result: "],
+		"proxyHttpPort": {
+			"jsonFilePath": "summator_config.json",
+			"keys": "http.api_endpoint.port"
+		},
+		"imploderDevelopmentProfileName": "dev",
+		"restartCondition": [{
+			"proxyUrlRegexp": "^/restart($|/|\\?)"
+		}],
+		"launchCompletedCondition": {
+			"stdioParsingRegexp": "Started on port ",
+			"stderr": true
+		},
+		"projectHttpPort": {
+			"stdioParsingRegexp": "on port (\\d+)",
+			"stderr": true
+		}
+	}, {
+		"name": "Multiplier",
+		"imploderProject": "./multiplier/tsconfig.json",
+		"launchCommand": ["{node}", "{bundle}", "Result: "],
+		"proxyHttpPort": 7837,
+		"imploderDevelopmentProfileName": "dev",
+		"restartCondition": [{
+			"proxyUrlRegexp": "^/restart_mult($|/|\\?)",
+			"projectName": "Summator"
+		}],
+		"launchCompletedCondition": {
+			"stdioParsingRegexp": "Started on port ",
+			"stderr": true
+		},
+		"projectHttpPort": {
+			"stdioParsingRegexp": "on port (\\d+)",
+			"stderr": true
+		}
+	}]
+}

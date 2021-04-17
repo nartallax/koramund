@@ -1,0 +1,49 @@
+{
+	"projects": [{
+		"name": "Summator",
+		"imploderProject": "./summator/tsconfig.json",
+		"launchCommand": ["{node}", "{bundle}", "Result: "],
+		"launchCompletedCondition": {
+			"stdioParsingRegexp": "Started on port ",
+			"stderr": true
+		},
+		"proxyHttpPort": {
+			"jsonFilePath": "summator_config.json",
+			"keys": "http.api_endpoint.port"
+		},
+		"projectHttpPort": {
+			"stdioParsingRegexp": "on port (\\d+)",
+			"stderr": true
+		},
+		"imploderDevelopmentProfileName": "dev",
+		"restartCondition": [{
+			"proxyUrlRegexp": "^/restart_on_delete($|/|\\?)",
+			"method": "DELETE"
+		}, {
+			"proxyUrlRegexp": "^/restart($|/|\\?)"
+		}],
+		"imploderBuildProfileName": "prod",
+		"postBuildActions": [
+			{"shell": "mv js/bundle.js result.js"}
+		]
+	}, {
+		"name": "Front",
+		"imploderProject": "./front/tsconfig.json",
+		"imploderDevelopmentProfileName": "dev"
+	}, {
+		"name": "Hashgen",
+		"launchCommand": ["{node}", "./hash_generator.js"],
+		"workingDirectory": ".",
+		"launchCompletedCondition": 1000,
+		"logging": {
+			"showStderr": false
+		},
+		"shutdownSequence": [
+			{"signal": "sigint"},
+			{"wait": 500},
+			{"signal": "sigint"},
+			{"wait": 500},
+			{"signal": "sigint"}
+		]
+	}]
+}

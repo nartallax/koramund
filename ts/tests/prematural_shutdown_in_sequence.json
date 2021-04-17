@@ -1,0 +1,16 @@
+{
+	"projects": [{
+		"name": "Hashgen",
+		"launchCommand": ["{node}", "./hash_generator.js"],
+		"workingDirectory": ".",
+		"launchCompletedCondition": {
+			"stdioParsingRegexp": "Started on port ",
+			"stderr": true
+		},
+		"shutdownSequence": [
+			{"signal": "sigusr1"},
+			{"wait": 3000},
+			{"signal": "sigusr1"}
+		]
+	}]
+}

@@ -1,0 +1,65 @@
+{ 
+    "exclude": [
+        "./test_projects/*",
+        "./test_projects_temp_dir_for_tests/*"
+    ],
+
+    "imploderConfig": {
+        "entryModule": "ts/src/tool_main.ts",
+        "entryFunction": "main",
+        "outFile": "js/bundle.js",
+        "target": "es2018",
+        "moduleBlacklistRegexp": ["^(?:/ts)?/tests/.*?$"]
+    },
+
+    "compilerOptions": {
+        "moduleResolution": "Node",
+        "lib": [
+            "dom",
+            "es2018"
+        ],
+
+        "baseUrl": "./ts",
+        "paths": {
+            "*": [
+                "./src/*"
+            ],
+            "tests/*": [
+                "./tests/*"
+            ]
+        },
+
+        "allowJs": false,
+
+        "noErrorTruncation": true,
+        "downlevelIteration": true,
+        "skipLibCheck": true,
+
+        "noImplicitUseStrict": false,
+        "alwaysStrict": true,
+        "newLine": "lf",
+        "noEmitOnError": true,
+        "pretty": false,
+        "removeComments": true,
+        "sourceMap": false,
+        "charset": "utf8",
+        "declaration": false,
+        "emitBOM": false,
+        "outDir": "js/main",
+        "module": "amd",
+        "target": "es2018",
+
+        "strict": true,
+        "allowUnreachableCode": false,
+        "allowUnusedLabels": false,
+        "noFallthroughCasesInSwitch": true,
+        "noImplicitAny": true,
+        "noImplicitReturns": true,
+        "noImplicitThis": true,
+        "noStrictGenericChecks": false,
+        "noUnusedLocals": true,
+        "noUnusedParameters": true,
+        "strictFunctionTypes": true,
+        "strictNullChecks": true
+    }
+}

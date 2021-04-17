@@ -1,0 +1,7 @@
+{
+	"http": {
+		"api_endpoint": {
+			"port": 6742
+		}
+	}
+}

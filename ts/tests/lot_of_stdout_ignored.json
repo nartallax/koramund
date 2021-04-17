@@ -1,0 +1,14 @@
+{
+	"projects": [{
+		"name": "BigOutputter",
+		"launchCommand": ["{node}", "./large_outputter.js", "stderr"],
+		"workingDirectory": ".",
+		"launchCompletedCondition": {
+			"stdioParsingRegexp": "Started on port ",
+			"stderr": true
+		},
+		"logging": {
+			"showStderr": false
+		}
+	}]
+}
