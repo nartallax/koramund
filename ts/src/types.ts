@@ -15,12 +15,12 @@ export type ProjectDefinition = ImploderProjectDefinition | ExternalProgramDefin
 export interface CommonProjectDefinition {
 	/** How to launch the project - a program and its arguments.
 	 * If not passed, project should not be launched. Makes sense in case of Imploder projects that only need running Imploder instance.
-	 * Placeholders could be used here. General syntax of placeholder is ${variableName}
+	 * Placeholders could be used here. General syntax of placeholder is {variableName}
 	 * Available variables:
 	 * bundle - path to Imploder bundle
 	 * node - same nodejs path as used to launch the tool
 	 * So command could look like this:
-	 * ["${node}" "${bundle}" "--this-is-debug-launch" "--config" "./config.cfg"] */
+	 * ["{node}" "{bundle}" "--this-is-debug-launch" "--config" "./config.cfg"] */
 	launchCommand?: string[];
 
 	/** A way for the tool to know when the project is launched and ready to work.
