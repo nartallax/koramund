@@ -150,6 +150,10 @@ By default Imploder project launch is deferred until first HTTP request. It can 
 
 --mode could be development, build and build-all. If build mode is selected, name of project to build is required (passed with --project)
 
+### Naming
+
+Koramund is originally a name of Carrier class battleship that manages multiple lesser interceptor ships, resembling the tool in some way.  
+
 ## Not done yet
 
 Windows support. There could be trouble about shell-commands and signal-sending.  
