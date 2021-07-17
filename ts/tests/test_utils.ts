@@ -88,7 +88,7 @@ export function httpReq(args: {port: number, path?: string, body?: string, metho
 
 }
 
-export function shouldBeEqual<T>(context: string, ethalon: T, value: T){
+export function shouldBeEqual<T>(context: string, ethalon: T, value: T): void {
 	if(value !== ethalon){
 		throw new Error(`Values of ${context} are not equal: expected ${ethalon}, got ${value}`);
 	}
@@ -103,35 +103,36 @@ export async function waitNoResolutionForLimitedTime<T>(x: T | Promise<T>, timeM
 }
 
 function promiseWithTimeout<T>(x: T | Promise<T>, timeMs: number, errorMessage?: string, expectNoResolution?: boolean): Promise<T | null>{
-	return new Promise(async (ok, bad) => {
+	return new Promise((ok, bad) => {
 		let completed = false;
-		try {
-			setTimeout(() => {
-				if(!completed){
-					completed = true;
-					if(expectNoResolution){
-						ok(null);
-					} else {
-						bad(new Error(errorMessage || "Timeout"))
-					}
-				}
-			}, timeMs);
-			let result = await Promise.resolve(x);
+		setTimeout(() => {
 			if(!completed){
 				completed = true;
 				if(expectNoResolution){
-					bad(errorMessage || "Promise resolved, but we expected it not to.")
+					ok(null);
 				} else {
-					ok(result);
+					bad(new Error(errorMessage || "Timeout"))
 				}
 			}
-		} catch(e){
-			if(!completed){
-				completed = true;
-				bad(e)
+		}, timeMs);
+		Promise.resolve(x).then(
+			result => {
+				if(!completed){
+					completed = true;
+					if(expectNoResolution){
+						bad(errorMessage || "Promise resolved, but we expected it not to.")
+					} else {
+						ok(result);
+					}
+				}
+			},
+			e => {
+				if(!completed){
+					completed = true;
+					bad(e)
+				}
 			}
-		}		
-
+		);
 	});
 }
 

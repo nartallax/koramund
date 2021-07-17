@@ -17,7 +17,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
 	})
 }
 
-export async function main(){
+export async function main(): Promise<void> {
 	console.error("Definitely not gonna listen on port 111222333!"); // trick for regexp
 	let server = http.createServer(handle);
 	server.listen(() => {

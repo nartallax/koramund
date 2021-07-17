@@ -1,3 +1,3 @@
-export function frontMain(){
+export function frontMain(): void {
 	console.log("Hello world!");
 }

@@ -61,7 +61,7 @@ export class ImploderProject extends Project<ImploderProjectDefinition> {
 		}
 	}
 
-	protected async getLaunchCommandTemplateArgs(){
+	protected async getLaunchCommandTemplateArgs(): Promise<Record<string, string>>{
 		let imploder = await this.getImploder();
 
 		return {
@@ -126,7 +126,7 @@ export class ImploderProject extends Project<ImploderProjectDefinition> {
 		return "nothing";
 	}
 
-	onHttpPortAcquired(port: number){
+	onHttpPortAcquired(port: number): void {
 		if(this.proxy){
 			this.proxy.httpPort = port;
 		} else {

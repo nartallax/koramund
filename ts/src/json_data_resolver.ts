@@ -16,7 +16,7 @@ export abstract class JsonDataResolver {
 			throw new Error(`Failed to extract value from JSON file ${fullFilePath}: FS error: ${e.message}`);
 		}
 	
-		let json: any;
+		let json: unknown;
 		try {
 			json = JSON.parse(fileContent);
 		} catch(e){
@@ -24,10 +24,10 @@ export abstract class JsonDataResolver {
 		}
 		let keySequence = typeof(jsonDataPath.keys) === "string"? jsonDataPath.keys.split("."): arrayOfMaybeArray(jsonDataPath.keys);
 		for(let part of keySequence){
-			if(typeof(json) !== "object"){
-				throw new Error(`Failed to extract value from JSON file ${fullFilePath}: failed to follow path part "${part}" (of ${keySequence.map(x => `"${x}"`).join(".")}): previous path part yielded non-object value.`);
+			if(typeof(json) !== "object" || !json){
+				throw new Error(`Failed to extract value from JSON file ${fullFilePath}: failed to follow path part "${part}" (of ${keySequence.map(x => `"${x}"`).join(".")}): previous path part yielded non-object or null value.`);
 			}
-			json = json[part];
+			json = (json as Record<string, unknown>)[part];
 		}
 		return json;
 	}

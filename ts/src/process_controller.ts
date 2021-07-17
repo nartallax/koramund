@@ -53,7 +53,7 @@ export class ProcessController extends ShellRunner {
 		super();
 	}
 
-	async onLaunchCompleted(){
+	async onLaunchCompleted(): Promise<void> {
 		await this.launchCompletedWaitingList.fire();
 	}
 
@@ -86,14 +86,14 @@ export class ProcessController extends ShellRunner {
 		return state === "stopped";
 	}
 
-	stopImmediatelyAndRough(){
+	stopImmediatelyAndRough(): void {
 		if(this.proc){
 			this.proc.kill("SIGKILL");
 		}
 	}
 
 	stop(force?: boolean, skipFirstSignal?: NodeJS.Signals): Promise<void>{
-		return new Promise(async (ok, bad) => {
+		return new Promise((ok, bad) => {
 			try {
 				const proc = this.proc;
 				if(!proc){
@@ -112,7 +112,7 @@ export class ProcessController extends ShellRunner {
 					stopped = true;
 					ok();
 				});
-				await this.withWaitLogging("stop", async () => {
+				this.withWaitLogging("stop", async () => {
 					this.opts.logger.logTool("Stopping.")
 					let shutdownSequence = arrayOfMaybeArray(this.opts.shutdownSequence || defaultShutdownSequence);
 					let firstAction = shutdownSequence[0];
@@ -135,7 +135,7 @@ export class ProcessController extends ShellRunner {
 							throw new Error("Unknown shutdown sequence item: " + JSON.stringify(action));
 						}
 					}
-				});
+				}).catch(bad);
 			} catch(e){
 				bad(e);
 			}

@@ -12,7 +12,7 @@ export class HttpProxy {
 	private readonly server: http.Server;
 	private readonly wsServer: Websocket.server;
 	// will be assigned from outside
-	httpPort: number = -1;
+	httpPort = -1;
 
 	constructor(private readonly opts: HttpProxyOptions) {
 		this.server = http.createServer(this.handle.bind(this));

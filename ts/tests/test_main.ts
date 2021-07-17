@@ -31,8 +31,8 @@ async function runSingleTest(name: string){
 	}
 }
 
-export async function testMain(){
-	if(!!process.argv[2]){
+export async function testMain(): Promise<void | never>{
+	if(process.argv[2]){
 		await runSingleTest(process.argv[2])
 	} else {
 		await runAllTests();

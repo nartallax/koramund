@@ -6,15 +6,15 @@ export class AsyncEvent<T = void> {
 		return this.handlers.length;
 	}
 
-	listen(handler: (arg: T) => void | Promise<void>){
+	listen(handler: (arg: T) => void | Promise<void>): void {
 		this.handlers.push({fn: handler, once: false});
 	}
 
-	listenOnce(handler: (arg: T) => void){
+	listenOnce(handler: (arg: T) => void): void {
 		this.handlers.push({fn: handler, once: true});
 	}
 
-	unlisten(handler: (arg: T)  => void){
+	unlisten(handler: (arg: T)  => void): void {
 		this.handlers = this.handlers.filter(x => x.fn !== handler);
 	}
 

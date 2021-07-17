@@ -12,7 +12,7 @@ async function callSummatorAndCheck(tool: TestToolInstance, expected: string): P
 	tool.checkProjectImploderState("Summator", true);
 }
 
-export const testList = {
+export const testList: Record<string, () => Promise<void>> = {
 	"normal": async () => {
 		await TestToolInstance.startDev("normal", async tool => {
 

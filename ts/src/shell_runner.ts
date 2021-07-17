@@ -26,10 +26,10 @@ export abstract class ShellRunner extends JsonDataResolver {
 	protected async fixCommand(command: string): Promise<string>{ return command; }
 	protected async fixCommandParts(commandParts: ReadonlyArray<string>): Promise<ReadonlyArray<string>>{ return commandParts; }
 
-	runShellCommand(command: string): Promise<ShellCommandRunResult>{
-		return new Promise(async (ok, bad) => {
+	async runShellCommand(command: string): Promise<ShellCommandRunResult>{
+		command = await this.fixCommand(command);
+		return await new Promise((ok,bad) => {
 			try {
-				command = await this.fixCommand(command);
 				let process = ChildProcess.exec(command, {
 					cwd: this.workingDirectory
 				}, (err, stdout, stderr) => {
@@ -129,22 +129,18 @@ export abstract class ShellRunner extends JsonDataResolver {
 	}
 
 	startProcessFromCommandPassLogsWaitZeroExit(command: string[]): Promise<{signal: NodeJS.Signals | null}>{
-		return new Promise(async (ok, bad) => {
-			try {
-				await this.startProcessFromCommandPassLogs({ 
-					command,
-					onExit: (code, signal) => {
-						if(code !== 0){
-							bad(new Error(`Process ${JSON.stringify(command)} exited with code ${code}.`));
-							return;
-						}
-
-						ok({signal});
+		return new Promise((ok, bad) => {
+			this.startProcessFromCommandPassLogs({ 
+				command,
+				onExit: (code, signal) => {
+					if(code !== 0){
+						bad(new Error(`Process ${JSON.stringify(command)} exited with code ${code}.`));
+						return;
 					}
-				})
-			} catch(e){
-				bad(e)
-			}
+
+					ok({signal});
+				}
+			}).catch(bad);
 		})
 	}
 

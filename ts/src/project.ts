@@ -54,7 +54,7 @@ export abstract class Project<D extends CommonProjectDefinition = CommonProjectD
 		return template.map(part => stringFormat(part, args))
 	}
 
-	protected isPreStarting: boolean = false;
+	protected isPreStarting = false;
 	/** Start or restart project */
 	async restart(): Promise<void>{
 		if(!this.process){
@@ -109,7 +109,9 @@ export abstract class Project<D extends CommonProjectDefinition = CommonProjectD
 
 	// some methods to override
 	// on prepare stage
-	abstract prepareForDevelopment(): Promise<void>;
+	async prepareForDevelopment(): Promise<void>{
+		// nothing here by default
+	}
 	// on initial launch stage
 	abstract onInitialLaunch(): Promise<void>;
 	protected abstract getActionOnUnexpectedShutdown(): OnShutdownActionName;
@@ -119,7 +121,7 @@ export abstract class Project<D extends CommonProjectDefinition = CommonProjectD
 	}
 
 	// on http port detected
-	onHttpPortAcquired(port: number){
+	onHttpPortAcquired(port: number): void {
 		this.logger.logTool("This project have nothing to do with its process' HTTP port (got " + port + ")");
 	}
 	protected async getLaunchCommandTemplateArgs(): Promise<{[name: string]: string}>{

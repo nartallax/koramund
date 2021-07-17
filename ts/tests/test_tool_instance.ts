@@ -60,7 +60,7 @@ export class TestToolInstance {
 		return proj
 	}
 
-	checkProjectRunningState(name: string, ...states: ProcessState[]){
+	checkProjectRunningState(name: string, ...states: ProcessState[]): void {
 		let proj = this.getProject(name);
 		if(!proj.process){
 			throw new Error(`Project named ${name} is not startable.`);
@@ -70,7 +70,7 @@ export class TestToolInstance {
 		}
 	}
 
-	checkProjectImploderState(name: string, isRunning: boolean){
+	checkProjectImploderState(name: string, isRunning: boolean): void {
 		let proj = this.getImploderProject(name);
 		if(proj.isImploderRunning() !== isRunning){
 			throw new Error(`Project named ${name} Imploder running status (${proj.isImploderRunning()}) is not equals to expected (${isRunning}).`);

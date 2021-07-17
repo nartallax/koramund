@@ -16,7 +16,7 @@ async function handle(req: http.IncomingMessage, res: http.ServerResponse): Prom
 	})
 }
 
-export async function main(){
+export async function main(): Promise<void>{
 	let server = http.createServer(handle);
 	server.listen(() => {
 		let addr = server.address();

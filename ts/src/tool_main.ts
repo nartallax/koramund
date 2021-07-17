@@ -32,7 +32,7 @@ export class Koramund {
 		}
 	}
 
-	async gracefulStop(signal?: NodeJS.Signals){
+	async gracefulStop(signal?: NodeJS.Signals): Promise<void> {
 		await Promise.all((this.projects || []).map(async x => {
 			try {
 				await x.beforeShutdown(signal)
@@ -42,7 +42,7 @@ export class Koramund {
 		}));
 	}
 	
-	async immediateStop(){
+	async immediateStop(): Promise<void> {
 		for(let project of this.projects || []){
 			if(project.process){
 				project.process.stopImmediatelyAndRough();
@@ -154,7 +154,7 @@ export class Koramund {
 	}
 }
 
-export async function main(){
+export async function main(): Promise<void | never> {
 	try {
 		await Koramund.start();
 	} catch(e){
