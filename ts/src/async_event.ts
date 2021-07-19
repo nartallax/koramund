@@ -1,33 +1,45 @@
-export class AsyncEvent<T = void> {
+import {Koramund} from "types";
 
-	private handlers: ({ fn: (arg: T) => void | Promise<void>, once: boolean})[] = [];
+export interface AsyncEvent<T = void> extends Koramund.AsyncEvent<T>{
+	listen(handler: (value: T) => void | Promise<void>): void;
+	fire(value: T): Promise<void>;
+}
 
-	get listenersCount(): number {
-		return this.handlers.length;
+export function makeAsyncEvent<T = void>(): AsyncEvent<T>{
+	let handlers: ({ fn: (arg: T) => void | Promise<void>, once: boolean})[] = []
+
+	let result = function(handler: (arg: T) => void | Promise<void>): void{
+		event.listen(handler);
 	}
 
-	listen(handler: (arg: T) => void | Promise<void>): void {
-		this.handlers.push({fn: handler, once: false});
+	let event = result as unknown as AsyncEvent<T>;
+
+	Object.defineProperty(event, "listenersCount", {
+		get: () => handlers.length
+	});
+
+	event.listen = (handler: (arg: T) => void | Promise<void>): void => {
+		handlers.push({fn: handler, once: false});
 	}
 
-	listenOnce(handler: (arg: T) => void): void {
-		this.handlers.push({fn: handler, once: true});
+	event.once = (handler: (arg: T) => void | Promise<void>): void => {
+		handlers.push({fn: handler, once: true});
 	}
 
-	unlisten(handler: (arg: T)  => void): void {
-		this.handlers = this.handlers.filter(x => x.fn !== handler);
+	event.detach = (handler: (arg: T)  => void): void => {
+		handlers = handlers.filter(x => x.fn !== handler);
 	}
 
-	wait(): Promise<T> {
-		return new Promise(ok => this.listenOnce(ok));
+	event.wait = (): Promise<T> => {
+		return new Promise<T>(ok => event.once(ok));
 	}
 
-	async fire(arg: T): Promise<void>{
+	event.fire = async (arg: T): Promise<void> => {
 		// not too optimal here
-		let handlers = this.handlers.filter(x => !!x)
-		this.handlers = handlers.filter(x => !x.once);
+		let curHandler = handlers.filter(x => !!x)
+		handlers = curHandler.filter(x => !x.once);
 		let errors: Error[] = [];
-		for(let handler of handlers){
+		for(let handler of curHandler){
 			try {
 				await Promise.resolve(handler?.fn(arg));
 			} catch(e){
@@ -42,4 +54,5 @@ export class AsyncEvent<T = void> {
 		}
 	}
 
+	return event
 }

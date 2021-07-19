@@ -21,7 +21,11 @@ export class ShellRunner implements Koramund.ShellHelper {
 					if(err){
 						bad(err);
 					} else {
-						ok({exitCode: process.exitCode, stdout, stderr})
+						ok({
+							exitCode: process.exitCode,
+							signal: process.signalCode,
+							stdout, stderr
+						})
 					}
 				});
 			} catch(e){
@@ -76,7 +80,7 @@ export class ShellRunner implements Koramund.ShellHelper {
 		return proc;
 	}
 
-	runProcess(opts: Koramund.StartProgramOptions): Promise<{signal: NodeJS.Signals | null}>{
+	runProcess(opts: Koramund.StartProgramOptions): Promise<Koramund.ProcessRunResult>{
 		return this.runProcessExpectAnyCode({
 			...opts,
 			onExit: (code, signal) => {
@@ -91,7 +95,9 @@ export class ShellRunner implements Koramund.ShellHelper {
 		});
 	}
 
-	runProcessExpectAnyCode(opts: Koramund.StartProgramOptions): Promise<{signal: NodeJS.Signals | null}>{
+	runProcessExpectAnyCode(opts: Koramund.StartProgramOptions): Promise<Koramund.ProcessRunResult>{
+
+
 		return new Promise((ok, bad) => {
 			this.startProcess({ 
 				...opts,
@@ -103,7 +109,7 @@ export class ShellRunner implements Koramund.ShellHelper {
 							bad(e);
 						}
 					}
-					ok({signal});
+					ok({signal, exitCode: code});
 				}
 			}).catch(bad);
 		})

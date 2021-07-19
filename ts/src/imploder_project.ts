@@ -1,15 +1,15 @@
 import {Imploder} from "@nartallax/imploder";
 import {AsyncEvent} from "async_event";
-import {CommonProgram, CommonProgramParams} from "common_program";
+import {CommonProject, CommonProjectParams} from "common_project";
 import {WrappingHttpProxy} from "http_proxy";
 import * as Path from "path";
 import * as Websocket from "websocket";
 import {Koramund} from "types";
 
-export interface ImploderProjectParams extends Koramund.ImploderProjectParams, CommonProgramParams {}
+export interface ImploderProjectParams extends Koramund.ImploderProjectParams, CommonProjectParams {}
 
 /** A Typescript project that uses Imploder. */
-export class ImploderProject extends CommonProgram<ImploderProjectParams> implements Koramund.ImploderProject {
+export class ImploderProject extends CommonProject<ImploderProjectParams> implements Koramund.ImploderProject {
 	private readonly proxy: WrappingHttpProxy | null;
 
 	private readonly buildFinishEvent = new AsyncEvent<Koramund.BuildResult>();
@@ -28,13 +28,13 @@ export class ImploderProject extends CommonProgram<ImploderProjectParams> implem
 		let imploder = await this.startImploder();
 		await imploder.compiler.waitBuildEnd();
 		if(!imploder.compiler.lastBuildWasSuccessful){
-			let result: Koramund.BuildResult = {success: false, type: buildType};
-			this.buildFinishEvent.fire(result)
+			let result: Koramund.BuildResult = {success: false, type: buildType, project: this};
+			await this.buildFinishEvent.fire(result)
 			return result;
 		}
 		await imploder.bundler.produceBundle();
-		let result: Koramund.BuildResult = {success: true, type: buildType};
-		this.buildFinishEvent.fire(result)
+		let result: Koramund.BuildResult = {success: true, type: buildType, project: this};
+		await this.buildFinishEvent.fire(result)
 		return result;
 	}
 
@@ -68,17 +68,6 @@ export class ImploderProject extends CommonProgram<ImploderProjectParams> implem
 		if(this.proxy){
 			this.proxy.targetHttpPort = port;
 		}
-	}
-
-	async stop(withSignal?: NodeJS.Signals): Promise<void>{
-		let imploder = this.imploder;
-		if(imploder){
-			await Promise.resolve(imploder.compiler.stop());
-		}
-		if(this.proxy){
-			await this.proxy.stop();
-		}
-		await super.stop(withSignal);
 	}
 
 	async start(): Promise<void>{
@@ -136,6 +125,17 @@ export class ImploderProject extends CommonProgram<ImploderProjectParams> implem
 	protected async beforeStart(): Promise<boolean>{
 		let result = await this.build();
 		return result.success
+	}
+
+	async shutdown(withSignal?: NodeJS.Signals): Promise<void> {
+		let imploder = this.imploder;
+		if(imploder){
+			await Promise.resolve(imploder.compiler.stop());
+		}
+		if(this.proxy){
+			await this.proxy.stop();
+		}
+		super.shutdown(withSignal);
 	}
 
 	// for tests

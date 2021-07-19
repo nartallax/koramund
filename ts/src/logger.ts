@@ -2,7 +2,7 @@ import {AsyncEvent} from "async_event";
 import {Koramund} from "types";
 
 export interface LoggerOptions {
-	readonly project: Koramund.CommonProgram;
+	readonly project: Koramund.CommonProject;
 	readonly log: (opts: Koramund.LoggingLineOptions) => void;
 }
 
@@ -47,7 +47,7 @@ export class Logger {
 }
 
 interface LoggingLineCommonValues {
-	project: Koramund.CommonProgram;
+	project: Koramund.CommonProject;
 	maxNameLength: number;
 	paddedName: string;
 }
@@ -80,7 +80,7 @@ class LoggingLineOptionsImpl implements Koramund.LoggingLineOptions {
 		return this.vals.maxNameLength;
 	}
 
-	get project(): Koramund.CommonProgram {
+	get project(): Koramund.CommonProject {
 		return this.vals.project
 	}
 }

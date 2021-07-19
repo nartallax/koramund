@@ -1,4 +1,4 @@
-import {Koramund} from "tool_main";
+import {Koramund} from "project_controller";
 import * as path from "path";
 import {promises as fs} from "fs";
 import {ProcessState} from "process_controller";

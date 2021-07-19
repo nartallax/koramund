@@ -3,12 +3,12 @@ import {ProcessController} from "process_controller";
 import {ShellRunner} from "shell_runner";
 import {Koramund} from "types";
 
-export interface CommonProgramParams extends Koramund.CommonProgramParams {
+export interface CommonProjectParams extends Koramund.CommonProjectParams {
 	log: (opts: Koramund.LoggingLineOptions) => void
 }
 
 /** A project - some piece of software. Could launch a process. */
-export class CommonProgram<P extends CommonProgramParams = CommonProgramParams> implements Koramund.CommonProgram {
+export class CommonProject<P extends CommonProjectParams = CommonProjectParams> implements Koramund.CommonProject {
 
 	readonly process: ProcessController | null;
 	
@@ -122,6 +122,11 @@ export class CommonProgram<P extends CommonProgramParams = CommonProgramParams> 
 
 	protected getWorkingDirectory(): string {
 		return this.params.workingDirectory || ".";
+	}
+
+	/** Stop completely, with all related resources */
+	async shutdown(withSignal?: NodeJS.Signals): Promise<void> {
+		this.stop(withSignal);
 	}
 
 }

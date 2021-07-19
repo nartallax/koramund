@@ -140,7 +140,7 @@ export function waitLine(logger: Logger, regexp: RegExp): Promise<string>{
 	return new Promise(ok => {
 		let handler = (line: string) => {
 			if(line.match(regexp)){
-				logger.onLine.unlisten(handler);
+				logger.onLine.detach(handler);
 				ok(line);
 			}
 		}
