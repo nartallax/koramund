@@ -1,196 +1,247 @@
-/** Contents of config file */
-export interface ToolConfig {
-	/** Definitions of the projects that are managed by the tool
-	 * Note that projects are started sequentally in this order (if launch is not delayed). */
-	projects: ProjectDefinition[];
-	/** "base" project. You can put some default values here and override them in project definitions. */
-	defaultProjectSettings?: Partial<ProjectDefinition>;
-}
+import * as Http from "http";
+import * as Websocket from "websocket";
+import * as ChildProcess from "child_process";
+import {Imploder} from "@nartallax/imploder";
 
-/** Definition of a single project.
- * Using this definition, the tool could run compiler, launch the project and parse its outputs. */
-export type ProjectDefinition = ImploderProjectDefinition | ExternalProgramDefinition;
+// тесты:
+// можно прочесть все тело в обработчике http-запроса, и оно будет передано вызываемому серверу
+// можно не читать тело в обработчике http-запроса, и оно будет потоково застримлено серверу
+// вебсокеты
+// можно запускать имплодер-проект без хттп прокси
+// при бесконечно не останавливающемся процессе логгер будет бесконечно логгировать то, что процесс не останавливается
+// написать тесты на разнообразные сигналы (kill, например), а затем гонять их на винде
 
-/** Common parts of project definition. */
-export interface CommonProjectDefinition {
-	/** How to launch the project - a program and its arguments.
-	 * If not passed, project should not be launched. Makes sense in case of Imploder projects that only need running Imploder instance.
-	 * Placeholders could be used here. General syntax of placeholder is {variableName}
-	 * Available variables:
-	 * bundle - path to Imploder bundle
-	 * node - same nodejs path as used to launch the tool
-	 * So command could look like this:
-	 * ["{node}" "{bundle}" "--this-is-debug-launch" "--config" "./config.cfg"] */
-	launchCommand?: string[];
+export namespace Koramund {
 
-	/** A way for the tool to know when the project is launched and ready to work.
-	 * Should be supplied if launchCommand is present, otherwise project is never considered launched. */
-	launchCompletedCondition?: RoArrayOrSingle<LaunchCompletedCondition>;
+	export function create(opts: EngineOptions): Engine {
+		void opts;
+		throw new Error("Not implemented.")
+	}
 
-	/** Directory to launch program in.
-	 * Relative paths are resolved starting at config file location.
-	 * If not specified, path to project config file, or this config directory is used. */
-	workingDirectory?: string;
-
-	/** Name of program. Will be used in logs.
-	 * If not specified, name of workingDirectory will be used. */
-	name?: string;
-
-	/** Options about project outputs and logging */
-	logging?: LoggingOptions;
-
-	/** Description of graceful way of process shutdown.
-	 * Default is "send SIGINT, wait 60 seconds, send SIGKILL"
-	 * Process shutdown occurs on tool termination, and on process-specific conditions. */
-	shutdownSequence?: RoArrayOrSingle<ShutdownSequenceItem>;
-}
-
-/** Some external program which is just need to be running.
- * We could not smart-control it, so it just will be running at the start of tool without any other assumptions. */
-export interface ExternalProgramDefinition extends CommonProjectDefinition {
-	/** What to do on program shutdown.
-	 * Default option is "restart". */
-	onShutdown?: OnShutdownActionName;
-}
-
-/** An Imploder project.
- * Imploder instance will be launched, and project code will be launched and restarted according to conditions. */
-export interface ImploderProjectDefinition extends CommonProjectDefinition {
-
-	/** Path to tsconfig.json of Imploder project.
-	 * Relative paths are resolved starting at config file location. */
-	imploderProject: string;
-
-	/** On what TCP port the project binds when run?
-	 * Expecting for project to listen for HTTP requests on this port.
-	 * It is highly recommended to bind on random port and parse this port's number from stdin/stderr.
-	 * This way you can have same ports in development and in production: 
-	 * in development requests will be proxified by the tool, and in production they will be handled by project directly. */
-	projectHttpPort?: HttpPortAcquringMethod;
-
-	/** On what TCP port should the tool proxy-listed for HTTP requests to project? */
-	proxyHttpPort?: number | ShellCommand | JsonDataPath;
+	export interface EngineOptions {
+		log: (opts: LoggingLineOptions) => void;
+		defaults?: Partial<CommonProgramParams>;
+	}
 	
-	/** Connect and read timeout for proxy. Milliseconds. Default is 180000 */
-	proxyTimeout?: number;
+	/** An initial entrypoint for any action in framework */
+	export interface Engine {
+		addImploderProject(params: ImploderProjectParams): Promise<ImploderProject>;
+		addProgram<T extends CommonProgramParams>(params: T): Promise<CommonProgram<T>>;
 
-	/** When the project should be launched for the first time after the tool is started? 
-	 * Note that this option also affects start of Imploder instance for this project
-	 * Default: if project have launchCommand, it will be launched on firstRequest, otherwise on toolStart.
-	 * Logic here is that we want the tool to start as fast as possible, so default is lazy-loading firstRequest,
-	 * but there are purely frontend project who need to have just Imploder instance and nothing more,
-	 * and if we default just to firstRequest, it will never be launched. */
-	initialLaunchOn?: "toolStart" | "firstRequest";
+		/** Path to NodeJS executable that runs the tool */
+		readonly nodePath: string;
+	}
 
-	/** A way for the tool to know when exactly project should be restarted
-	 * On restart project is also rebuilt. */
-	restartCondition?: RoArrayOrSingle<RestartCondition>;
+	/** Common part of any project/program */
+	export interface CommonProgram<P extends CommonProgramParams = CommonProgramParams> {
+		readonly name: string;
+		readonly params: P;
+		/** Shell helper with default working directory = program working directory */
+		readonly shell: ShellHelper;
+		/** Controller for the process of the program/project. Could be null if project is not launchable */
+		readonly process: ProcessController | null;
+		/** Should be invoked when launch is in progress to notify the program about it's launch status */
+		notifyLaunched(): void;
 
-	/** Name of Imploder profile, specified in tsconfig.json
-	 * This profile will be used when tool is running in development mode.
-	 * The tool expects Imploder to run in watch mode when launched with this profile. */
-	imploderDevelopmentProfileName?: string;
+		/** Start the project. Promise resolves when the project is started completely, i.e. after notifyLaunched() is invoked */
+		start(): Promise<void>;
+		
+		/** Stop the project. Resolves when stop sequence is completed. */
+		stop(): Promise<void>;
 
-	/** Name of Imploder profile, specified in tsconfig.json
-	 * This profile will be used when tool is running to single-time build this project.
-	 * Production settings expected, ie no watch mode, minification and so on */
-	imploderBuildProfileName?: string;
+		/** stop() and then start(). Won't throw project is not launched, so can be used as safer start() variant */
+		restart(): Promise<void>;
 
-	/** Some actions that should take place after successful build. */
-	postBuildActions?: RoArrayOrSingle<ShellCommand | ProgramLaunchCommand>;
-}
+		// note that some event handlers here and later expect to get promise sometimes
+		// this means that these events will wait for all handlers to complete before carrying on usual actions
+		/** New process just created for this project */
+		onProcessCreated(handler: (event: ProcessCreatedEvent) => void): void;
+		/** Startup completed (notifyLaunched invoked) */
+		onStarted(handler: () => void): void;
+		/** Process terminated */
+		onStop(handler: (event: ProcessStopEvent) => void): void;
+		/** A line appears on stdout of the process */
+		onStdout(handler: (stdoutLine: string) => void): void;
+		/** A line appears on stdin of the process */
+		onStderr(handler: (stderrLine: string) => void): void;
+	}
 
-/** How a project outputs should be processed */
-export interface LoggingOptions {
-	/** Shoud pass stdout of project into tool logs? Default true. */
-	showStdout?: boolean;
-	/** Shoud pass stderr of project into tool logs? Default true. */
-	showStderr?: boolean;
-	/** Shoud show logs of the tool itself related to the project? Default true. */
-	showToolLogs?: boolean;
-	/** Format-string of tool log output related to the project.
-	 * Default is "{projectName} | {date} {time} | {message}" */
-	format?: string;
-	/** if specified, this regexp will be applied to each line of stdout/stderr output of process to extract valuable part of it to present.
-	 * First captured group will be taken. */
-	outputExtractionRegexp?: string;
-}
+	/** An Imploder project.
+ 	* Imploder instance will be launched, and project code will be launched and restarted according to conditions. */
+	export interface ImploderProject extends CommonProgram<ImploderProjectParams> {
+		/** Imploder context of the project. Null means not started yet */
+		readonly imploder: Imploder.Context | null;
 
-/** A way to acquire TCP port.
- * number - just the port number.
- * ShellCommand - some command that will output port number in stdout when launched.
- * The command will be executed once on tool start.
- * StdioParsingRegexp - if project outputs port into stdout/stderr, this is the way to extract the port. 
- * First regexp group is expected to contain the port value. */
-export type HttpPortAcquringMethod = number | ShellCommand | StdioParsingRegexp | JsonDataPath;
+		/** Set the TCP port last launched program instance listens on with HTTP server.
+		 * Best set when program is starting. Could be different between different program
+		 * It is highly recommended in development to bind on random port and parse this port's number from stdin/stderr.
+		 * This way you can have same ports in development and in production: 
+		 * in development requests will be proxified by the tool, and in production they will be handled by project directly. */
+		notifyProcessHttpPort(port: number): void; 
 
-/** A way to wait for project to launch.
- * number - wait this number of milliseconds after launch. Not recommended.
- * StdioParsingRegexp - wait for specific line in stderr/stdout. If regexp matched - project is started. */
-export type LaunchCompletedCondition = number | StdioParsingRegexp | ProjectEventReference;
+		/** Build project.
+		 * Default build type is release, because in development builds are performed automatically */
+		build(buildType?: BuildType): Promise<BuildResult>;
 
-/** Condition that defines event on which project should be restarted.
- * The project is restarted if regexp matches on stderr/stdout line or proxy url. */
-export type RestartCondition = StdioParsingRegexp | ProxyUrlRegexp | ProjectEventReference;
+		/** Start Imploder instance.
+		 * Is not nessessary to call before start() or build(), as they will call this on its own.
+		 * Should be called in case of development of in-browser projects, which won't really "start" on their own.
+		 * Best runs with lazyStart Imploder option, allowing to postpone actual start of compiler. */
+		startImploder(): Promise<Imploder.Context>;
 
-export interface ProxyUrlRegexp {
-	proxyUrlRegexp: string;
-	/** Way of filtering the requests urls of which will be used. Expecting POST/GET/PUT etc.
-	 * If not specified, every request will be used regardless of method. */
-	method?: string;
-	/** Way of adding condition to another project http requests
-	 * For instance, if you want to restart backend each time main page of frontend is refreshed. */
-	projectName?: string;
-}
+		/** A build of the project is finished. Note that the build could be unsuccessful. */
+		onBuildFinished(handler: (buildResult: BuildResult) => void): void;
+		/** Proxy receives HTTP request */
+		onHttpRequest(handler: (request: HttpRequest) => PromiseOrValue<void>): void;
+		/** Proxy receives websocket connect request */
+		onWebsocketConnectStarted(handler: (request: Websocket.request) => PromiseOrValue<void>): void;
+		/** Proxy connected incoming client connection to server */
+		onWebsocketConnected(handler: (request: Websocket.request) => void): void;
+		/** Proxy detected disconnect of one of the parties */
+		onWebsocketDisconnected(handler: (event: WebsocketDisconnectEvent) => void): void
+		/** Proxy got message from one of the parties */
+		onWebsocketMessage(handler: (event: WebsocketMessageEvent) => PromiseOrValue<void>): void;
+	}
 
-/** A shell command.
- * Note that output of the command will be buffered and therefore won't be visible until execution is completed.
- * Do not use it if output will be huge. */
-export interface ShellCommand {
-	shell: string;
-}
+	/** Common parts of project/program definition. */
+	export interface CommonProgramParams {
+		/** How to launch the project - a program and its arguments.
+		 * If not passed, project should not be launched. This makes sense in case of Imploder projects that only need running Imploder instance.*/
+		readonly getLaunchCommand?: () => PromiseOrValue<ReadonlyArray<string>>;
 
-/** Path to some data inside some JSON file. */
-export interface JsonDataPath {
-	jsonFilePath: string;
-	keys: RoArrayOrSingle<string | number>;
-}
+		/** If not specified, defaults to path to project config file, or this config directory is used. */
+		readonly workingDirectory?: string;
+		
+		/** Name of program */
+		readonly name: string;
 
-/** An instruction how to launch a program with some command-line arguments.
- * Output of the program will be displayed "live", if it is appropriate. */
-export interface ProgramLaunchCommand {
-	/** Template arguments are also present here, see CommonProjectDefinition.launchCommand */
-	programLaunch: string[];
-}
+		/** Description of graceful way of process shutdown.
+		 * Default is "send SIGINT, wait 60 seconds, send SIGKILL"
+		 * Process shutdown occurs on tool termination, and on process-specific conditions. */
+		readonly shutdownSequence?: RoArrayOrSingle<ShutdownSequenceItem>;
 
-export interface StdioParsingRegexp {
-	stdioParsingRegexp: string;
-	/** Search in stderr instead of default stdout */
-	stderr?: boolean;
-	/** Way of adding condition to another project stdio output */
-	projectName?: string;
-}
+		// stdio options. sometimes could help fight performance issues if stdout/stderr is big and useless
+		// passing false here will drop all input to onStderr/onStdout completely, as well as input to logger
+		readonly dropStdout?: boolean;
+		readonly dropStderr?: boolean;
+	}
 
-export type RoArrayOrSingle<T> = T | ReadonlyArray<T>;
+	export interface ImploderProjectParams extends CommonProgramParams {
+		/** Path to tsconfig.json of Imploder project */
+		readonly tsconfigPath: string;
 
-/** A single action in shutdown sequence */
-export type ShutdownSequenceItem = SignalShutdownSequenceItem | WaitShutdownSequenceItem
+		/** Set the TCP port the tool will listen for incoming requests on.
+		 * Proxifying HTTP requests in development is the way to achieve advanced control over projects
+		 * (lazy-start of project/compiler, intercepting and triggering on http requests to project, and more) */
+		readonly proxyHttpPort?: number;
 
-/** Action "send system signal to a process" */
-export interface SignalShutdownSequenceItem {
-	signal: NodeJS.Signals;
-}
+		/** Connect and read timeout for proxy. Milliseconds. Default is 180000 */
+		readonly proxyTimeout?: number;
 
-/** Action "wait" */
-export interface WaitShutdownSequenceItem {
-	wait: number;
-}
+		/** Name of Imploder profile. Profiles are specified in tsconfig.json
+		 * This profile will be used when tool is trying to be built.
+		 * Tool will launch Imploder on release build (expects single-time build) 
+		 * and before process start/restart (expects watch mode) */
+		readonly profile?: string;
+	}
 
-export type OnShutdownActionName = "restart" | "nothing";
+	export type LoggingLineSource = "stdout" | "stderr" | "tool";
 
-export interface ProjectEventReference {
-	/** "restart" is invoked when other project restartCondition is met
-	 * "launchCompleted" is invoked when other project launchCompletedCondition is met */
-	eventType: "restart" | "launchCompleted";
-	projectName: string;
+	export interface LoggingLineOptions {
+		/** Where does this message comes from - from stdio of the project, or from the tool itself? */
+		readonly source: LoggingLineSource; 
+		readonly project: CommonProgram;
+		/** White-padded project name to make outputs more beautiful */
+		readonly paddedProjectName: string;
+		/** Longest name length among active projects */
+		readonly maxNameLength: number;
+		readonly message: string;
+		readonly timeStr: string;
+		readonly dateStr: string;
+	}
+
+	export type RoArrayOrSingle<T> = ReadonlyArray<T> | T;
+	export type PromiseOrValue<T> = Promise<T> | T;
+
+	export type BuildType = "development" | "release";
+
+	export interface BuildResult {
+		success: boolean;
+		type: BuildType;
+	}
+
+	export interface HttpRequest {
+		method: string;
+		url: string;
+		headers: Http.IncomingHttpHeaders;
+		getBody(): Promise<Buffer>;
+	}
+
+	export interface WebsocketDisconnectEvent {
+		from: "client" | "server";
+		error: Error | null;
+		code: number;
+		description: string;
+	}
+
+	export interface WebsocketMessageEvent {
+		message: Websocket.IMessage;
+		from: "client" | "server";
+	}
+
+	/** A single action in shutdown sequence */
+	export type ShutdownSequenceItem = SignalShutdownSequenceItem | WaitShutdownSequenceItem
+
+	/** Action "send system signal to a process" */
+	export interface SignalShutdownSequenceItem {
+		signal: NodeJS.Signals;
+	}
+
+	/** Action "wait" */
+	export interface WaitShutdownSequenceItem {
+		wait: number;
+	}
+
+	export interface ProcessStopEvent {
+		code: number | null;
+		signal: NodeJS.Signals | null;
+		/** Was this stop expected/initiated by tool, or the program just crashed/stopped spontaneously? */
+		expected: boolean
+	}
+
+	export interface ProcessCreatedEvent {
+		process: ChildProcess.ChildProcess
+	}
+
+	/** An utility to help run shell commands and spawn processes
+	 * Expects zero exit code from any program running, but this is overrideable */
+	export interface ShellHelper {
+		runCommand(command: string): Promise<ShellCommandRunResult>
+		runCommandExpectAnyCode(command: string): Promise<ShellCommandRunResult>
+		startProcess(opts: StartProgramOptions): Promise<ChildProcess.ChildProcess>
+		runProcess(opts: StartProgramOptions): Promise<{signal: NodeJS.Signals | null}>
+		runProcessExpectAnyCode(opts: StartProgramOptions): Promise<{signal: NodeJS.Signals | null}>
+	}
+
+	export interface ShellCommandRunResult {
+		exitCode: number | null;
+		stdout: string;
+		stderr: string;
+	}
+	
+	export interface StartProgramOptions {
+		command: ReadonlyArray<string>;
+		onStdout?: ((line: string) => void) | undefined;
+		onStderr?: ((line: string) => void) | undefined;
+		onExit?: (code: number | null, signal: NodeJS.Signals | null) => void;
+	}
+
+	export type ProcessRunState = "stopped" | "starting" | "running" | "stopping";
+
+	/** Wrapper around some program that could be started and stopped */
+	export interface ProcessController {
+		readonly process: ChildProcess.ChildProcess | null;
+		readonly state: ProcessRunState;
+	}
+
 }

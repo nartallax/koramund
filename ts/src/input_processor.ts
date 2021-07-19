@@ -2,7 +2,7 @@ import {ImploderProjectDefinition, ProjectDefinition, ProjectEventReference, Pro
 import {ImploderProject} from "imploder_project";
 import {Project} from "project";
 import {arrayOfMaybeArray, isJsonDataPath, isProjectEventReference, isProxyUrlRegexp, isShellCommand, isStdioParsingRegexp, nameOf} from "utils";
-import {AsyncEvent} from "async_event";
+import {AsyncEvent} from "utils/async_event";
 
 /** Class that processes all the inputs (stdio, http) and fires the events */
 export class InputProcessor {

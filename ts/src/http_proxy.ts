@@ -1,20 +1,33 @@
 import * as http from "http";
 import * as Websocket from "websocket";
 import {Logger} from "logger";
+import {AsyncEvent} from "async_event";
+import {Koramund} from "types";
+import {CallBuffer} from "call_buffer";
 
-export interface HttpProxyOptions {
-	onRequest: (opts: {url: string, method: string}) => Promise<void>;
+export interface WrappingHttpProxyOptions {
 	logger: Logger;
 	timeout?: number;
+	port: number;
 }
 
-export class HttpProxy {
+/** An HTTP proxy that wraps an other HTTP listener and allows to handle some network-related events about it */
+export class WrappingHttpProxy {
 	private readonly server: http.Server;
 	private readonly wsServer: Websocket.server;
-	// will be assigned from outside
-	httpPort = -1;
+	readonly onHttpRequest = new AsyncEvent<Koramund.HttpRequest>();
+	readonly onWebsocketConnectStarted = new AsyncEvent<Websocket.request>();
+	readonly onWebsocketConnected = new AsyncEvent<Websocket.request>();
+	readonly onWebsocketDisconnect = new AsyncEvent<Koramund.WebsocketDisconnectEvent>();
+	readonly onWebsocketMessage = new AsyncEvent<Koramund.WebsocketMessageEvent>();
+	readonly startEvent = new AsyncEvent();
+	private isStarting = false;
+	private isStarted = false;
 
-	constructor(private readonly opts: HttpProxyOptions) {
+	// should be assigned from outside
+	targetHttpPort = -1;
+
+	constructor(private readonly opts: WrappingHttpProxyOptions) {
 		this.server = http.createServer(this.handle.bind(this));
 		this.wsServer = new Websocket.server({
 			httpServer: this.server,
@@ -23,19 +36,39 @@ export class HttpProxy {
 		this.wsServer.on("request", this.processWebsocketRequest.bind(this));
 	}
 
-	start(port: number): Promise<void> {
-		return new Promise(ok => {
-			this.server.listen(port, ok);
+	async start(): Promise<void> {
+		if(this.isStarted){
+			return;
+		}
+		if(this.isStarting){
+			return await this.startEvent.wait();
+		}
+		this.isStarting = true;
+		return await new Promise(ok => {
+			this.server.listen(this.opts.port, () => {
+				this.isStarted = true;
+				this.isStarting = false;
+				ok();
+			});
 		});
 	}
 
 	stop(): Promise<void>{
 		return new Promise((ok, bad) => {
-			this.server.close(err => err? bad(err): ok())
+			this.server.close(err => {
+				// here could appear some discrepancies, if invoked when starting in progress
+				// but in reality it won't happen, so let's not make this harder now
+				this.isStarted = false;
+				if(err){
+					bad(err);
+				} else {
+					ok()
+				}
+			})
 		});
 	}
 
-	private processWebsocketRequest(req: Websocket.request): void{
+	private async processWebsocketRequest(req: Websocket.request): Promise<void> {
 		if(req.origin !== "localhost"){
 			this.opts.logger.logTool("Rejecting websocket request from origin \"" + req.origin + "\". Only localhost is allowed.");
 			req.reject();
@@ -43,6 +76,7 @@ export class HttpProxy {
 		}
 
 		let client = new Websocket.client();
+		await this.onWebsocketConnectStarted.fire(req);
 
 		client.on("connectFailed", err => {
 			this.opts.logger.logTool("Websocket proxy failed to connect: " + err);
@@ -50,25 +84,31 @@ export class HttpProxy {
 		});
 
 		client.on("connect", outConn => {
+			this.onWebsocketConnected.fire(req);
 			let inConn = req.accept(undefined, req.origin);
 
+			let lastError: Error | null = null;
 			outConn.on("error", err => {
 				this.opts.logger.logTool("Websocket proxy outcoming connection gave error: " + err);
+				lastError = err;
 				inConn.close();
 				outConn.close(); // drop..?
 			});
 
 			inConn.on("error", err => {
+				lastError = err;
 				this.opts.logger.logTool("Websocket proxy incoming connection gave error: " + err);
 				inConn.close();
 				outConn.close();
 			});
 
 			outConn.on("close", (code, desc) => {
+				this.onWebsocketDisconnect.fire({ error: lastError, code, description: desc, from: "server" });
 				inConn.close(code, desc);
 			});
 
 			inConn.on("close", (code, desc) => {
+				this.onWebsocketDisconnect.fire({ error: lastError, code, description: desc, from: "client" });
 				outConn.close(code, desc);
 			});
 
@@ -86,9 +126,17 @@ export class HttpProxy {
 				}
 			}
 
-			inConn.on("message", msg => sendTo(outConn, msg));
-			outConn.on("message", msg => sendTo(inConn, msg));
+			inConn.on("message", async msg => {
+				await this.onWebsocketMessage.fire({message: msg, from: "client"});
+				sendTo(outConn, msg)
+			});
+			outConn.on("message", async msg => {
+				await this.onWebsocketMessage.fire({message: msg, from: "server"});
+				sendTo(inConn, msg)
+			});
 		});
+
+		client.connect(`ws://localhost:${this.targetHttpPort}${req.resourceURL.pathname}${req.resourceURL.search}`, 'echo-protocol');
 
 	}
 	
@@ -170,19 +218,19 @@ export class HttpProxy {
 		});
 	}
 
-	private makeRequest(inReq: http.IncomingMessage): Promise<http.IncomingMessage> {
+	private makeRequest(inReq: http.IncomingMessage, preReadBody: Buffer | null): Promise<http.IncomingMessage> {
 		return new Promise((ok, bad) => {
 			try {
 				let parsedUrl = new URL(inReq.url || "", "http://localhost");
 
-				if(this.httpPort < 0){
+				if(this.targetHttpPort < 0){
 					throw new Error("Could not create proxy request: HTTP port of running project is not assigned.");
 				}
 
 				let options: http.RequestOptions = {
 					protocol: parsedUrl.protocol,
 					hostname: "localhost",
-					port: this.httpPort,
+					port: this.targetHttpPort,
 					path: parsedUrl.pathname + (parsedUrl.search || ""),
 					timeout: this.timeout, // note: it's just connect timeout and not read timeout
 					method: (inReq.method || "").toUpperCase(),
@@ -203,10 +251,14 @@ export class HttpProxy {
 					bad(err);
 				});
 
-				inReq.on("data", chunk => outReq.write(chunk));
-				inReq.on("end", () => {
-					outReq.end();
-				});
+				if(preReadBody){
+					outReq.end(preReadBody);
+				} else {
+					inReq.on("data", chunk => outReq.write(chunk));
+					inReq.on("end", () => {
+						outReq.end();
+					});
+				}
 			} catch(e) {
 				inReq.destroy(e);
 				bad(e)
@@ -215,6 +267,22 @@ export class HttpProxy {
 	}
 
 	private async handle(inReq: http.IncomingMessage, inResp: http.ServerResponse): Promise<void> {
+
+		let bodyCallBuffer = new CallBuffer<Buffer>(() => new Promise((ok, bad) => {
+			let arr: Buffer[] = [];
+			inReq.on("data", chunk => arr.push(chunk));
+			inReq.on("end", () => ok(Buffer.concat(arr)));
+			inReq.on("error", err => bad(err));
+		}))
+		let handlerInvocationCompleted = false;
+		function getBody(): Promise<Buffer>{
+			if(handlerInvocationCompleted){
+				throw new Error("Request body is only accessible in http request event handler.");
+			}
+			
+			return bodyCallBuffer.get();
+		}
+
 		let url = inReq.url;
 		let method = inReq.method
 		try {
@@ -222,9 +290,13 @@ export class HttpProxy {
 				throw new Error("Request without url/method!");
 			}
 
-			await this.opts.onRequest({url, method});
+			await this.onHttpRequest.fire({ url, method, headers: inReq.headers, getBody });
+			handlerInvocationCompleted = true;
 
-			let outResp = await this.makeRequest(inReq);
+			let preReadBody: Buffer | null = bodyCallBuffer.hasValue()? bodyCallBuffer.getValue()
+				: bodyCallBuffer.isWorking()? await bodyCallBuffer.get()
+				: null;
+			let outResp = await this.makeRequest(inReq, preReadBody);
 			await this.pipeRequests(outResp, inResp);
 		} catch(e){
 			this.opts.logger.logTool(`Error handling HTTP ${method} to ${url}: ` + e.message);

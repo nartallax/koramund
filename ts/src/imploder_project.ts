@@ -1,108 +1,58 @@
 import {Imploder} from "@nartallax/imploder";
 import {AsyncEvent} from "async_event";
-import {ImploderProjectDefinition, OnShutdownActionName} from "types";
-import {HttpProxy} from "http_proxy";
-import {Project} from "project";
-import * as path from "path";
-import {arrayOfMaybeArray, isJsonDataPath, isProgramLaunchCommand, isShellCommand, nameOf} from "utils";
+import {CommonProgram, CommonProgramParams} from "common_program";
+import {WrappingHttpProxy} from "http_proxy";
+import * as Path from "path";
+import * as Websocket from "websocket";
+import {Koramund} from "types";
+
+export interface ImploderProjectParams extends Koramund.ImploderProjectParams, CommonProgramParams {}
 
 /** A Typescript project that uses Imploder. */
-export class ImploderProject extends Project<ImploderProjectDefinition> {
-	private readonly proxy: HttpProxy | null;
+export class ImploderProject extends CommonProgram<ImploderProjectParams> implements Koramund.ImploderProject {
+	private readonly proxy: WrappingHttpProxy | null;
 
-	readonly onHttpRequest: AsyncEvent<{url: string, method: string}> | null;
+	private readonly buildFinishEvent = new AsyncEvent<Koramund.BuildResult>();
 
-	constructor(opts: ImploderProjectDefinition, private readonly isSingleTimeBuild: boolean){
+	constructor(opts: ImploderProjectParams){
 		super(opts);
-		this.proxy = opts.proxyHttpPort === undefined? null: new HttpProxy({
+
+		this.proxy = opts.proxyHttpPort === undefined? null: new WrappingHttpProxy({
 			logger: this.logger,
-			onRequest: async opts => {
-				if(!this.onHttpRequest){
-					throw new Error("Have request, but no request event!"); // never happen
-				}
-				if(this.def.initialLaunchOn !== "toolStart" && this.process?.state === "stopped"){
-					await this.restart();
-				}
-				await this.onHttpRequest.fire(opts);
-			},
+			port: opts.proxyHttpPort,
 			timeout: opts.proxyTimeout
 		});
-		this.onHttpRequest = !this.proxy? null: new AsyncEvent();
 	}
 
-	async prepareForDevelopment(): Promise<void> {
-		if(this.proxy){
-			let port = await this.getProxyHttpPort();
-			await this.proxy.start(port);
-		}
-	}
-
-	async build(): Promise<boolean>{
-		let imploder = await this.getImploder();
+	async build(buildType: Koramund.BuildType = "release"): Promise<Koramund.BuildResult>{
+		let imploder = await this.startImploder();
 		await imploder.compiler.waitBuildEnd();
 		if(!imploder.compiler.lastBuildWasSuccessful){
-			return false;
+			let result: Koramund.BuildResult = {success: false, type: buildType};
+			this.buildFinishEvent.fire(result)
+			return result;
 		}
 		await imploder.bundler.produceBundle();
-		return true;
-	}
-
-	async doPostBuildActions(): Promise<void>{
-		for(let action of arrayOfMaybeArray(this.def.postBuildActions)){
-			if(isShellCommand(action)){
-				let {stdout, stderr} = await this.runShellCommandWithZeroCode(action.shell);
-				stdout.split("\n").forEach(x => this.logger.logStdout(x));
-				stderr.split("\n").forEach(x => this.logger.logStderr(x));
-			} else if(isProgramLaunchCommand(action)){
-				await this.startProcessFromCommandPassLogsWaitZeroExit(action.programLaunch);
-			} else {
-				throw new Error(`Unknown item type of ${nameOf<ImploderProjectDefinition>("postBuildActions")}: ${JSON.stringify(action)}`);
-			}
-		}
-	}
-
-	protected async getLaunchCommandTemplateArgs(): Promise<Record<string, string>>{
-		let imploder = await this.getImploder();
-
-		return {
-			...await super.getLaunchCommandTemplateArgs(),
-			bundle: imploder.config.outFile
-		}
-	}
-
-	protected beforeStart(): Promise<boolean>{
-		return this.build();
-	}
-
-	async onInitialLaunch(): Promise<void> {
-		if(this.def.initialLaunchOn === "toolStart"){
-			await this.restart();
-		} else if(!this.def.initialLaunchOn && !this.process){
-			await this.getImploder();
-		}
-	}
-
-	private async getProxyHttpPort(): Promise<number> {
-		let getPortLogic = this.def.proxyHttpPort;
-		if(getPortLogic === undefined){
-			throw new Error("Need proxy port, but no acquiring logic is supplied!"); // should never happen
-		} else if(typeof(getPortLogic) === "number"){
-			return getPortLogic;
-		} else if(isShellCommand(getPortLogic)) {
-			return await this.runShellCommandToInt(getPortLogic.shell)
-		} else if(isJsonDataPath(getPortLogic)) {
-			return await this.runJsonDataPathForNumber(getPortLogic);
-		} else {
-			throw new Error(`Could not understand type of ${nameOf<ImploderProjectDefinition>("proxyHttpPort")} (full value is ${JSON.stringify(getPortLogic)})`);
-		}
+		let result: Koramund.BuildResult = {success: true, type: buildType};
+		this.buildFinishEvent.fire(result)
+		return result;
 	}
 
 	private _imploder: Promise<Imploder.Context> | Imploder.Context | null = null;
-	private async getImploder(): Promise<Imploder.Context> {
+
+	get imploder(): Imploder.Context | null {
+		if(!this._imploder || this._imploder instanceof Promise){
+			return null;
+		} else {
+			return this._imploder;
+		}
+	}
+
+	async startImploder(): Promise<Imploder.Context> {
 		if(this._imploder === null){
 			this.logger.logTool("Launching Imploder.");
-			this._imploder = Imploder.runFromTsconfig(this.def.imploderProject, {
-				profile: this.isSingleTimeBuild? this.def.imploderBuildProfileName: this.def.imploderDevelopmentProfileName,
+			this._imploder = Imploder.runFromTsconfig(this.params.tsconfigPath, {
+				profile: this.params.profile,
 				writeLogLine: str => this.logger.logTool(str)
 			});
 		}
@@ -111,42 +61,86 @@ export class ImploderProject extends Project<ImploderProjectDefinition> {
 			this._imploder = await this._imploder;
 		}
 
-		if(this._imploder.config.watchMode === this.isSingleTimeBuild){
-			throw new Error("Misconfiguration: for this tool mode, expected Imploder watch mode to be " + (this.isSingleTimeBuild? "disabled": "enabled") + ", but it is not.");
-		}
-
 		return this._imploder;
 	}
 
-	isImploderRunning(): boolean {
-		return !!this._imploder;
-	}
-
-	protected getActionOnUnexpectedShutdown(): OnShutdownActionName {
-		return "nothing";
-	}
-
-	onHttpPortAcquired(port: number): void {
+	notifyProcessHttpPort(port: number): void {
 		if(this.proxy){
-			this.proxy.httpPort = port;
-		} else {
-			super.onHttpPortAcquired(port);
+			this.proxy.targetHttpPort = port;
 		}
 	}
 
-	async beforeShutdown(): Promise<void>{
-		await super.beforeShutdown();
-		if(this._imploder){
-			let imploder = await this.getImploder();
+	async stop(withSignal?: NodeJS.Signals): Promise<void>{
+		let imploder = this.imploder;
+		if(imploder){
 			await Promise.resolve(imploder.compiler.stop());
 		}
 		if(this.proxy){
 			await this.proxy.stop();
 		}
+		await super.stop(withSignal);
 	}
 
-	protected getProjectSourcesRootDir(): string | undefined {
-		return path.dirname(this.def.imploderProject);
+	async start(): Promise<void>{
+		if(this.proxy){
+			await this.proxy.start();
+		}
+		await super.start();
+	}
+
+	// events
+	onBuildFinished(handler: (buildResult: Koramund.BuildResult) => void): void {
+		this.buildFinishEvent.listen(handler);
+	}
+
+	onHttpRequest(handler: (request: Koramund.HttpRequest) => Koramund.PromiseOrValue<void>): void {
+		if(!this.proxy){
+			throw new Error("This project does not have HTTP proxy, therefore won't ever capture HTTP request.");
+		}
+		this.proxy.onHttpRequest.listen(handler);
+	}
+
+	onWebsocketConnectStarted(handler: (request: Websocket.request) => Koramund.PromiseOrValue<void>): void {
+		if(!this.proxy){
+			throw new Error("This project does not have HTTP proxy, therefore won't ever capture websocket connection.");
+		}
+		this.proxy.onWebsocketConnectStarted.listen(handler);
+	}
+	
+	onWebsocketConnected(handler: (request: Websocket.request) => void): void {
+		if(!this.proxy){
+			throw new Error("This project does not have HTTP proxy, therefore won't ever capture websocket connection.");
+		}
+		this.proxy.onWebsocketConnected.listen(handler);
+	}
+
+	onWebsocketDisconnected(handler: (event: Koramund.WebsocketDisconnectEvent) => void): void {
+		if(!this.proxy){
+			throw new Error("This project does not have HTTP proxy, therefore won't ever capture websocket connection (and disconnection).");
+		}
+		this.proxy.onWebsocketDisconnect.listen(handler);
+	}
+	
+	onWebsocketMessage(handler: (event: Koramund.WebsocketMessageEvent) => Koramund.PromiseOrValue<void>): void {
+		if(!this.proxy){
+			throw new Error("This project does not have HTTP proxy, therefore won't ever capture websocket messages.");
+		}
+		this.proxy.onWebsocketMessage.listen(handler);
+	}
+
+	//overrides
+	protected getWorkingDirectory(): string {
+		return this.params.workingDirectory || Path.dirname(this.params.tsconfigPath);
+	}
+
+	protected async beforeStart(): Promise<boolean>{
+		let result = await this.build();
+		return result.success
+	}
+
+	// for tests
+	isImploderRunning(): boolean {
+		return !!this._imploder;
 	}
 	
 }
