@@ -1,7 +1,7 @@
 import * as ChildProcess from "child_process";
 import {Logger} from "logger";
 import {arrayOfMaybeArray, isSignalShutdownSequenceItem, isWaitShutdownSequenceItem} from "utils";
-import {AsyncEvent} from "async_event";
+import {makeAsyncEvent} from "async_event";
 import {ShellRunner} from "shell_runner";
 import {Koramund} from "types";
 
@@ -9,7 +9,6 @@ export interface ProcessOptions {
 	readonly shell: ShellRunner;
 	readonly logger: Logger;
 	readonly getLaunchCommand: () => Koramund.PromiseOrValue<ReadonlyArray<string>>;
-	readonly beforeStart: () => boolean | Promise<boolean>;
 	readonly shouldCaptureStdout: boolean;
 	readonly shouldCaptureStderr: boolean;
 	readonly shutdownSequence?: Koramund.RoArrayOrSingle<Koramund.ShutdownSequenceItem>;
@@ -27,11 +26,12 @@ const defaultShutdownSequence: ReadonlyArray<Koramund.ShutdownSequenceItem> = [
 export class ProcessController implements Koramund.ProcessController {
 
 	private proc: ChildProcess.ChildProcess | null = null;
-	readonly onLaunchCompleted = new AsyncEvent();
-	readonly onStop = new AsyncEvent<Koramund.ProcessStopEvent>();
-	readonly onStdout = new AsyncEvent<string>();
-	readonly onStderr = new AsyncEvent<string>();
-	readonly onProcessCreated = new AsyncEvent<Koramund.ProcessCreatedEvent>();
+	readonly onLaunchCompleted = makeAsyncEvent();
+	readonly onStop = makeAsyncEvent<Koramund.ProcessStopEvent>();
+	readonly onStdout = makeAsyncEvent<string>();
+	readonly onStderr = makeAsyncEvent<string>();
+	readonly onProcessCreated = makeAsyncEvent<Koramund.ProcessCreatedEvent>();
+	readonly onBeforeStart = makeAsyncEvent();
 	private isStopping = false;
 	private isStarting = false;
 	
@@ -121,7 +121,7 @@ export class ProcessController implements Koramund.ProcessController {
 					proc.kill(signal);
 				} else if(isWaitShutdownSequenceItem(action)){
 					let isStopped = await Promise.race([
-						new Promise<boolean>(ok => setTimeout(() => ok(false), action.wait)),
+						new Promise<boolean>(ok => setTimeout(() => ok(false), Math.ceil(action.wait * 1000))),
 						stopPromise
 					]);
 					if(isStopped){
@@ -167,12 +167,14 @@ export class ProcessController implements Koramund.ProcessController {
 				return;
 			}
 
-			if(!await Promise.resolve(this.opts.beforeStart())){
+			try {
+				await this.onBeforeStart.fire();
+			} catch(e){
+				this.opts.logger.logTool("Could not start process: " + (e.message || e))
 				this.isStarting = false;
 				return;
 			}
-
-
+			
 			this.proc = await this.opts.shell.startProcess({
 				command: launchCommand,
 				onStdout: !this.opts.shouldCaptureStdout? undefined: line => {
@@ -195,7 +197,7 @@ export class ProcessController implements Koramund.ProcessController {
 				}
 			});
 
-			this.onProcessCreated.fire({process: this.proc});
+			await this.onProcessCreated.fire({process: this.proc});
 
 			await launchPromise;
 			this.isStarting = false;

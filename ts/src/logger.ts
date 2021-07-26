@@ -1,21 +1,21 @@
-import {AsyncEvent} from "async_event";
+import {makeAsyncEvent} from "async_event";
 import {Koramund} from "types";
 
 export interface LoggerOptions {
-	readonly project: Koramund.CommonProject;
+	getProject(): Koramund.BaseProject;
 	readonly log: (opts: Koramund.LoggingLineOptions) => void;
 }
 
 /** Class that contains most of logic about tool output */
 export class Logger {
-	readonly onLine = new AsyncEvent<Koramund.LoggingLineOptions>(); // for testing purposes
+	readonly onLine = makeAsyncEvent<Koramund.LoggingLineOptions>(); // for testing purposes
 	private vals: LoggingLineCommonValues;
 	
 	constructor(private readonly opts: LoggerOptions){
 		this.vals = {
-			project: opts.project,
-			maxNameLength: opts.project.name.length, // is there better initial value..?
-			paddedName: opts.project.name
+			get project(): Koramund.BaseProject { return opts.getProject() },
+			maxNameLength: 0,
+			paddedName: "<not set yet>" // should not matter really
 		}
 	}
 
@@ -47,7 +47,7 @@ export class Logger {
 }
 
 interface LoggingLineCommonValues {
-	project: Koramund.CommonProject;
+	project: Koramund.BaseProject;
 	maxNameLength: number;
 	paddedName: string;
 }
@@ -80,7 +80,7 @@ class LoggingLineOptionsImpl implements Koramund.LoggingLineOptions {
 		return this.vals.maxNameLength;
 	}
 
-	get project(): Koramund.CommonProject {
+	get project(): Koramund.BaseProject {
 		return this.vals.project
 	}
 }

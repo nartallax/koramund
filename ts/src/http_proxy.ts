@@ -1,9 +1,9 @@
 import * as http from "http";
 import * as Websocket from "websocket";
 import {Logger} from "logger";
-import {AsyncEvent} from "async_event";
 import {Koramund} from "types";
 import {CallBuffer} from "call_buffer";
+import {makeAsyncEvent} from "async_event";
 
 export interface WrappingHttpProxyOptions {
 	logger: Logger;
@@ -15,14 +15,16 @@ export interface WrappingHttpProxyOptions {
 export class WrappingHttpProxy {
 	private readonly server: http.Server;
 	private readonly wsServer: Websocket.server;
-	readonly onHttpRequest = new AsyncEvent<Koramund.HttpRequest>();
-	readonly onWebsocketConnectStarted = new AsyncEvent<Websocket.request>();
-	readonly onWebsocketConnected = new AsyncEvent<Websocket.request>();
-	readonly onWebsocketDisconnect = new AsyncEvent<Koramund.WebsocketDisconnectEvent>();
-	readonly onWebsocketMessage = new AsyncEvent<Koramund.WebsocketMessageEvent>();
-	readonly startEvent = new AsyncEvent();
+	readonly onHttpRequest = makeAsyncEvent<Koramund.HttpRequest>();
+	readonly onWebsocketConnectStarted = makeAsyncEvent<Koramund.WebsocketConnectionEvent>();
+	readonly onWebsocketConnected = makeAsyncEvent<Koramund.WebsocketConnectionEvent>();
+	readonly onWebsocketDisconnect = makeAsyncEvent<Koramund.WebsocketDisconnectEvent>();
+	readonly onWebsocketMessage = makeAsyncEvent<Koramund.WebsocketMessageEvent>();
+	readonly startPromise = makeAsyncEvent();
+	readonly stopPromise = makeAsyncEvent();
 	private isStarting = false;
 	private isStarted = false;
+	private isStopping = false;
 
 	// should be assigned from outside
 	targetHttpPort = -1;
@@ -40,29 +42,64 @@ export class WrappingHttpProxy {
 		if(this.isStarted){
 			return;
 		}
+
+		if(this.isStopping){
+			await this.stopPromise.wait();
+		}
+
 		if(this.isStarting){
-			return await this.startEvent.wait();
+			await this.startPromise.wait();
+			return;
 		}
 		this.isStarting = true;
-		return await new Promise(ok => {
-			this.server.listen(this.opts.port, () => {
+
+		return await new Promise((ok, bad) => {
+			this.server.listen(this.opts.port, async () => {
 				this.isStarted = true;
 				this.isStarting = false;
-				ok();
+				try {
+					await this.startPromise.fire();
+					ok();
+				} catch(e){
+					this.startPromise.throw(e);
+					bad(e);
+				}
 			});
 		});
 	}
 
-	stop(): Promise<void>{
-		return new Promise((ok, bad) => {
-			this.server.close(err => {
+	async stop(): Promise<void>{
+		if(!this.isStarted && !this.isStarting && !this.isStopping){
+			return;
+		}
+
+		if(this.isStarting){
+			await this.startPromise.wait();
+		}
+
+		if(this.isStopping){
+			await this.stopPromise.wait();
+			return;
+		}
+		this.isStopping = true;
+
+		await new Promise<void>((ok, bad) => {
+			this.server.close(async err => {
 				// here could appear some discrepancies, if invoked when starting in progress
 				// but in reality it won't happen, so let's not make this harder now
 				this.isStarted = false;
+				this.isStopping = false;
+
 				if(err){
 					bad(err);
 				} else {
-					ok()
+					try {
+						await this.stopPromise.fire();
+						ok()
+					} catch(e){
+						this.stopPromise.throw(e);
+						bad(e);
+					}
 				}
 			})
 		});
@@ -76,15 +113,15 @@ export class WrappingHttpProxy {
 		}
 
 		let client = new Websocket.client();
-		await this.onWebsocketConnectStarted.fire(req);
+		await this.onWebsocketConnectStarted.fire({ request: req });
 
 		client.on("connectFailed", err => {
 			this.opts.logger.logTool("Websocket proxy failed to connect: " + err);
 			req.reject(500, "Proxy-connection to target server failed.");
 		});
 
-		client.on("connect", outConn => {
-			this.onWebsocketConnected.fire(req);
+		client.on("connect", async outConn => {
+			await this.onWebsocketConnected.fire({ request: req });
 			let inConn = req.accept(undefined, req.origin);
 
 			let lastError: Error | null = null;
@@ -103,13 +140,13 @@ export class WrappingHttpProxy {
 			});
 
 			outConn.on("close", (code, desc) => {
-				this.onWebsocketDisconnect.fire({ error: lastError, code, description: desc, from: "server" });
 				inConn.close(code, desc);
+				this.onWebsocketDisconnect.fire({ error: lastError, code, description: desc, from: "server" });
 			});
 
 			inConn.on("close", (code, desc) => {
-				this.onWebsocketDisconnect.fire({ error: lastError, code, description: desc, from: "client" });
 				outConn.close(code, desc);
+				this.onWebsocketDisconnect.fire({ error: lastError, code, description: desc, from: "client" });
 			});
 
 			let sendTo = (conn: Websocket.connection, msg: Websocket.IMessage) => {

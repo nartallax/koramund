@@ -4,6 +4,9 @@ import * as ChildProcess from "child_process";
 import {Imploder} from "@nartallax/imploder";
 import {ProjectController} from "project_controller";
 
+// workingDirectory авторезолвится при tsconfigPath
+// setMaxNameLength у логгеров
+
 // тесты:
 // можно прочесть все тело в обработчике http-запроса, и оно будет передано вызываемому серверу
 // можно не читать тело в обработчике http-запроса, и оно будет потоково застримлено серверу
@@ -21,15 +24,24 @@ export namespace Koramund {
 
 	export interface ProjectControllerOptions {
 		log: (opts: LoggingLineOptions) => void;
-		defaults?: Partial<CommonProjectParams>;
-		/** If true, controller won't attempt to handle signals passed to the tool instance */
+		/** If true, controller won't attempt to handle signals received by the tool process instance */
 		preventSignalHandling?: boolean;
 	}
 	
 	/** An initial entrypoint for any action in framework */
 	export interface ProjectController {
-		addImploderProject(params: ImploderProjectParams): ImploderProject;
-		addExternalProject<T extends CommonProjectParams>(params: T): CommonProject<T>;
+		addProject(p: BaseProjectParams): 
+			BaseProject<BaseProjectParams>;
+		addProject(p: ImploderProjectParams): 
+			BaseProject<ImploderProjectParams> & ImploderProject
+		addProject(p: LaunchableProjectParams): 
+			BaseProject<LaunchableProjectParams> & LaunchableProject
+		addProject(p: ImploderProjectParams & LaunchableProjectParams): 
+			BaseProject<ImploderProjectParams & LaunchableProjectParams> & ImploderProject & LaunchableProject
+		addProject(p: HttpProxifyableProjectParams): 
+			BaseProject<HttpProxifyableProjectParams> & HttpProxifyableProject
+		addProject(p: ImploderProjectParams & HttpProxifyableProjectParams): 
+			BaseProject<ImploderProjectParams & HttpProxifyableProjectParams> & ImploderProject & HttpProxifyableProject
 
 		/** Path to NodeJS executable that runs the tool */
 		readonly nodePath: string;
@@ -47,11 +59,15 @@ export namespace Koramund {
 	}
 
 	/** Common part of any project */
-	export interface CommonProject<P extends CommonProjectParams = CommonProjectParams> {
+	export interface BaseProject<P extends BaseProjectParams = BaseProjectParams> {
 		readonly name: string;
 		readonly params: P;
 		/** Shell helper with default working directory = program working directory */
 		readonly shell: ShellHelper;
+		readonly logger: Logger
+	}
+
+	export interface LaunchableProject {
 		/** Controller for the process of the project. Could be null if project is not launchable */
 		readonly process: ProcessController | null;
 		/** Should be invoked when launch is in progress to notify the project about its launch status */
@@ -81,17 +97,32 @@ export namespace Koramund {
 		/** Process terminated */
 		onStop: AsyncEvent<ProcessStopEvent>;
 		/** A line appears on stdout of the process */
-		onStdout(handler: (stdoutLine: string) => void): void;
+		onStdout: AsyncEvent<string>;
 		/** A line appears on stdin of the process */
-		onStderr(handler: (stderrLine: string) => void): void;
+		onStderr: AsyncEvent<string>;
 	}
 
-	/** An Imploder project.
- 	* Imploder instance will be launched, and project code will be launched and restarted according to conditions. */
-	export interface ImploderProject extends CommonProject<ImploderProjectParams> {
+	/** A project buildable with Imploder. */
+	export interface ImploderProject {
 		/** Imploder context of the project. Null means not started yet */
 		readonly imploder: Imploder.Context | null;
 
+		/** Build project.
+		 * Default build type is release, because in development builds are performed automatically */
+		build(buildType?: BuildType): Promise<BuildResult>;
+
+		/** Start Imploder instance. Will return running instance if already started.
+		 * Is not nessessary to call before start() or build(), as they will call this on its own.
+		 * Should be called in case of development of in-browser projects, which won't really "start" on their own.
+		 * Best runs with lazyStart Imploder option, allowing to postpone actual start of compiler. */
+		startImploder(): Promise<Imploder.Context>;
+
+		/** A build of the project is finished. Note that the build could be unsuccessful. */
+		onBuildFinished: AsyncEvent<BuildResult>;
+	}
+
+	/** A launchable project that has HTTP interface and is able to be proxifyed for this interface */
+	export interface HttpProxifyableProject extends LaunchableProject {
 		/** Set the TCP port last launched program instance listens on with HTTP server.
 		 * Best set when program is starting. Could be different for different launches
 		 * It is highly recommended in development to bind on random port and parse this port's number from stdin/stderr.
@@ -99,41 +130,33 @@ export namespace Koramund {
 		 * in development requests will be proxified by the tool, and in production they will be handled by project directly. */
 		notifyProcessHttpPort(port: number): void; 
 
-		/** Build project.
-		 * Default build type is release, because in development builds are performed automatically */
-		build(buildType?: BuildType): Promise<BuildResult>;
-
-		/** Start Imploder instance.
-		 * Is not nessessary to call before start() or build(), as they will call this on its own.
-		 * Should be called in case of development of in-browser projects, which won't really "start" on their own.
-		 * Best runs with lazyStart Imploder option, allowing to postpone actual start of compiler. */
-		startImploder(): Promise<Imploder.Context>;
-
-		/** A build of the project is finished. Note that the build could be unsuccessful. */
-		onBuildFinished(handler: (buildResult: BuildResult) => PromiseOrValue<void>): void;
 		/** Proxy receives HTTP request */
-		onHttpRequest(handler: (request: HttpRequest) => PromiseOrValue<void>): void;
+		onHttpRequest: AsyncEvent<HttpRequest>;
 		/** Proxy receives websocket connect request */
-		onWebsocketConnectStarted(handler: (request: Websocket.request) => PromiseOrValue<void>): void;
+		onWebsocketConnectStarted: AsyncEvent<WebsocketConnectionEvent>;
 		/** Proxy connected incoming client connection to server */
-		onWebsocketConnected(handler: (request: Websocket.request) => void): void;
+		onWebsocketConnected: AsyncEvent<WebsocketConnectionEvent>;
 		/** Proxy detected disconnect of one of the parties */
-		onWebsocketDisconnected(handler: (event: WebsocketDisconnectEvent) => void): void
+		onWebsocketDisconnected: AsyncEvent<WebsocketDisconnectEvent>;
 		/** Proxy got message from one of the parties */
-		onWebsocketMessage(handler: (event: WebsocketMessageEvent) => PromiseOrValue<void>): void;
+		onWebsocketMessage: AsyncEvent<WebsocketMessageEvent>;
 	}
 
 	/** Common parts of project definition. */
-	export interface CommonProjectParams {
-		/** How to launch the project - path to an executable and its arguments.
-		 * If not passed, project should not be launched. This makes sense in case of Imploder projects that only need running Imploder instance.*/
-		readonly getLaunchCommand?: () => PromiseOrValue<ReadonlyArray<string>>;
-
-		/** If not specified, defaults to path to project config file, or this config directory is used. */
-		readonly workingDirectory?: string;
-		
+	export interface BaseProjectParams {
 		/** Name of project */
 		readonly name: string;
+
+		/** Working directory of the project.
+		 * Determines where project-related shell commands are launched, and project itself, if it is launchable.
+		 * If not specified, defaults to path to project config file, or tool instance working directory. */
+		readonly workingDirectory?: string;
+	}
+
+	export interface LaunchableProjectParams extends BaseProjectParams {
+		/** How to launch the project - path to an executable and its arguments.
+		 * If not passed, project should not be launched. This makes sense in case of Imploder projects that only need running Imploder instance. */
+		readonly getLaunchCommand: () => PromiseOrValue<ReadonlyArray<string>>;
 
 		/** Description of graceful way of process shutdown.
 		 * Default is "send SIGINT, wait 60 seconds, send SIGKILL"
@@ -146,17 +169,19 @@ export namespace Koramund {
 		readonly dropStderr?: boolean;
 	}
 
-	export interface ImploderProjectParams extends CommonProjectParams {
-		/** Path to tsconfig.json of Imploder project */
-		readonly tsconfigPath: string;
-
+	export interface HttpProxifyableProjectParams extends LaunchableProjectParams {
 		/** Set the TCP port the tool will listen for incoming requests on.
 		 * Proxifying HTTP requests in development is the way to achieve advanced control over projects
 		 * (lazy-start of project/compiler, intercepting and triggering on http requests to project, and more) */
-		readonly proxyHttpPort?: number;
+		readonly proxyHttpPort: number;
 
 		/** Connect and read timeout for proxy. Milliseconds. Default is 180000 */
 		readonly proxyTimeout?: number;
+	}
+
+	export interface ImploderProjectParams extends BaseProjectParams {
+		/** Path to tsconfig.json of Imploder project */
+		readonly tsconfigPath: string;
 
 		/** Name of Imploder profile. Profiles are specified in tsconfig.json
 		 * This profile will be used when tool is trying to be built.
@@ -165,12 +190,18 @@ export namespace Koramund {
 		readonly profile?: string;
 	}
 
+	export interface Logger {
+		logTool(message: string): void;
+		logStderr(message: string): void;
+		logStdout(message: string): void;
+	}
+
 	export type LoggingLineSource = "stdout" | "stderr" | "tool";
 
 	export interface LoggingLineOptions {
 		/** Where does this message comes from - from stdio of the project, or from the tool itself? */
 		readonly source: LoggingLineSource; 
-		readonly project: CommonProject;
+		readonly project: BaseProject;
 		/** White-padded project name to make outputs more beautiful */
 		readonly paddedProjectName: string;
 		/** Longest name length among active projects */
@@ -196,6 +227,10 @@ export namespace Koramund {
 		url: string;
 		headers: Http.IncomingHttpHeaders;
 		getBody(): Promise<Buffer>;
+	}
+
+	export interface WebsocketConnectionEvent {
+		request: Websocket.request;
 	}
 
 	export interface WebsocketDisconnectEvent {
@@ -274,9 +309,9 @@ export namespace Koramund {
 	export interface AsyncEvent<T = void> {
 		readonly listenersCount: number;
 
-		(handler: (value: T) => PromiseOrValue<void>): void;
-		once(handler: (value: T) => PromiseOrValue<void>): void;
-		detach(handler: (value: T) => PromiseOrValue<void>): void;
+		(handler: (value: T) => PromiseOrValue<unknown>): void;
+		once(handler: (value: T) => PromiseOrValue<unknown>): void;
+		detach(handler: (value: T) => PromiseOrValue<unknown>): void;
 		wait(): Promise<T>;
 	}
 

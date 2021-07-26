@@ -3,10 +3,15 @@ import {Koramund} from "types";
 export interface AsyncEvent<T = void> extends Koramund.AsyncEvent<T>{
 	listen(handler: (value: T) => void | Promise<void>): void;
 	fire(value: T): Promise<void>;
+	throw(error: Error): void;
 }
 
 export function makeAsyncEvent<T = void>(): AsyncEvent<T>{
-	let handlers: ({ fn: (arg: T) => void | Promise<void>, once: boolean})[] = []
+	let handlers: ({ 
+		fn: (arg: T) => void | Promise<void>, 
+		onErr?: (err: Error) => void,
+		once: boolean
+	})[] = []
 
 	let result = function(handler: (arg: T) => void | Promise<void>): void{
 		event.listen(handler);
@@ -31,12 +36,14 @@ export function makeAsyncEvent<T = void>(): AsyncEvent<T>{
 	}
 
 	event.wait = (): Promise<T> => {
-		return new Promise<T>(ok => event.once(ok));
+		return new Promise<T>((ok, bad) => {
+			handlers.push({fn: ok, once: true, onErr: bad})
+		});
 	}
 
 	event.fire = async (arg: T): Promise<void> => {
 		// not too optimal here
-		let curHandler = handlers.filter(x => !!x)
+		let curHandler = [...handlers];
 		handlers = curHandler.filter(x => !x.once);
 		let errors: Error[] = [];
 		for(let handler of curHandler){
@@ -52,6 +59,16 @@ export function makeAsyncEvent<T = void>(): AsyncEvent<T>{
 			case 1: throw errors[0];
 			default: throw new Error("Multiple errors were thrown when firing event:\n" + errors.map(x => x.message).join("\n"));
 		}
+	}
+
+	event.throw = (err: Error): void => {
+		// not too optimal here
+		let errHandlers = handlers.filter(x => !!x.onErr)
+		handlers = handlers.filter(x => !x.once || !x.onErr);
+
+		errHandlers.forEach(errHandler => {
+			errHandler.onErr && errHandler.onErr(err);
+		});
 	}
 
 	return event
