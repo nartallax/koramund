@@ -17,6 +17,10 @@ export class CallBuffer<T> {
 		return this.acquired;
 	}
 
+	getValueOrNull(): T | null {
+		return this.acquired? this.value as T: null;
+	}
+
 	getValue(): T {
 		if(!this.acquired){
 			throw new Error("Could not get value: it's not acquired yet.");

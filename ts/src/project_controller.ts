@@ -48,11 +48,11 @@ export class ProjectController implements Koramund.ProjectController {
 		return process.argv[0];
 	}
 
-	async buildAll(buildType?: Koramund.BuildType): Promise<Koramund.BuildResult[]>{
+	async buildAll(): Promise<Koramund.BuildResult[]>{
 		let result: Koramund.BuildResult[] = [];
 		for(let project of this.projects){
 			if(isImploderProject(project)){
-				result.push(await project.build(buildType));
+				result.push(await project.build());
 			}			
 		}
 		return result;
@@ -60,24 +60,20 @@ export class ProjectController implements Koramund.ProjectController {
 
 	async shutdown(signal?: NodeJS.Signals): Promise<void> {
 		await Promise.all(this.projects.map(async project => {
-			if(!isLaunchableProject(project)){
-				return;
-			}
-
 			try {
 				await project.shutdown(signal)
 			} catch(e){
-				project.logger.logTool("Failed to shutdown gracefully: "+ e.message);
+				project.logger.logTool("Failed to shutdown gracefully: " + e.message);
 			}
 		}));
 	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- any does not really go anywhere as function type is explicitly defined in interface
 	addProject<P extends Koramund.BaseProjectParams>(params: P): any {
-		if(isImploderProjectParams(params) && params.tsconfigPath && !params.workingDirectory){
+		if(isImploderProjectParams(params) && params.imploderTsconfigPath && !params.workingDirectory){
 			params = {
 				...params,
-				workingDirectory: Path.dirname(params.tsconfigPath)
+				workingDirectory: Path.dirname(params.imploderTsconfigPath)
 			}
 		}
 
@@ -95,6 +91,8 @@ export class ProjectController implements Koramund.ProjectController {
 		if(isImploderProjectParams(params)){
 			baseProject = createImploderProject(baseProject);
 		}
+
+		this.projects.push(baseProject);
 
 		this.updateLoggers();
 

@@ -43,12 +43,12 @@ export function makeAsyncEvent<T = void>(): AsyncEvent<T>{
 
 	event.fire = async (arg: T): Promise<void> => {
 		// not too optimal here
-		let curHandler = [...handlers];
-		handlers = curHandler.filter(x => !x.once);
+		let curHandlers = [...handlers];
+		handlers = curHandlers.filter(x => !x.once);
 		let errors: Error[] = [];
-		for(let handler of curHandler){
+		for(let handler of curHandlers){
 			try {
-				await Promise.resolve(handler?.fn(arg));
+				await Promise.resolve(handler.fn(arg));
 			} catch(e){
 				errors.push(e);
 			}

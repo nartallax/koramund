@@ -1,4 +1,3 @@
-import {AsyncEvent, makeAsyncEvent} from "async_event";
 import {BaseProjectInternal} from "base_project";
 import {ProcessController} from "process_controller";
 import {Koramund} from "types";
@@ -7,8 +6,6 @@ export interface LaunchableProjectInternal extends Koramund.LaunchableProject {
 	process: ProcessController
 	shutdown(withSignal?: NodeJS.Signals): Promise<void>
 	stop(withSignal?: NodeJS.Signals): Promise<void>
-	onShutdown: AsyncEvent<void>;
-
 }
 
 export function createLaunchableProject<P extends Koramund.LaunchableProjectParams>(base: BaseProjectInternal<P>): BaseProjectInternal<P> & Koramund.LaunchableProject {
@@ -26,40 +23,38 @@ export function createLaunchableProject<P extends Koramund.LaunchableProjectPara
 		...base,
 		process: procController,
 
-		onShutdown: makeAsyncEvent(),
 		onProcessCreated: procController.onProcessCreated,
 		onStarted: procController.onLaunchCompleted,
 		onStop: procController.onStop,
 		onStderr: procController.onStderr,
 		onStdout: procController.onStdout,
 
-		async shutdown(withSignal?: NodeJS.Signals): Promise<void> {
-			await this.onShutdown.fire();
-			this.stop(withSignal);
-		},
-
 		async stop(withSignal?: NodeJS.Signals): Promise<void> {
 			this.process.stop(false, withSignal);
 		},
 
 		async restart(): Promise<void>{
-			await this.process.stop(true);
-			await this.start();
+			await Promise.all([
+				this.process.stop(true),
+				this.start()
+			]);
 		},
 	
-		async start(): Promise<void>{
-			await this.process.start();
+		async start(): Promise<Koramund.ProjectStartResult>{
+			return await this.process.start();
 		},
 
 		async notifyLaunched(): Promise<void>{
 			if(this.process.state === "starting"){
 				await this.process.notifyLaunchCompleted();
 			} else {
-				this.logger.logTool("Detected completed launch of process, but the process is in " + this.process.state + " (and not starting). Won't do anything.");
+				this.logger.logTool("Detected completed launch of process, but the process is in " + this.process.state + " state (and not starting). Won't do anything.");
 			}
 		}
 
 	}
+
+	proj.onShutdown(withSignal => proj.process.stop(true, withSignal));
 
 	return proj
 
@@ -69,6 +64,6 @@ export function isLaunchableProjectParams(params: Koramund.BaseProjectParams): p
 	return typeof((params as Koramund.LaunchableProjectParams).getLaunchCommand) === "function"
 }
 
-export function isLaunchableProject<P extends Koramund.BaseProjectParams>(project: BaseProjectInternal<P>): project is BaseProjectInternal<P> & LaunchableProjectInternal {
+export function isLaunchableProject<P extends Koramund.BaseProjectParams>(project: Koramund.BaseProject<P>): project is BaseProjectInternal<P> & LaunchableProjectInternal {
 	return !!(project as BaseProjectInternal<P> & LaunchableProjectInternal).process
 }

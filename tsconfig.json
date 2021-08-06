@@ -7,9 +7,24 @@
     "imploderConfig": {
         "entryModule": "ts/src/tool_main.ts",
         "entryFunction": "main",
-        "outFile": "js/bundle.js",
+        "outFile": "target/koramund.js",
         "target": "es2018",
-        "moduleBlacklistRegexp": ["^(?:/ts)?/tests/.*?$"]
+        "moduleBlacklistRegexp": ["^(?:/ts)?/tests/.*?$"],
+        "profiles": {
+            "test": {
+                "moduleBlacklistRegexp": [],
+                "entryModule": "ts/generated/test_entrypoint.ts",
+                "entryFunction": "testMain",
+                "outFile": "target/koramund_test.js",
+                "plugins": [
+                    {
+                        "transform": "@nartallax/clamsensor",
+                        "type": "imploder",
+                        "generatedFilePath": "ts/generated/test_entrypoint.ts"
+                    }
+                ]
+            }
+        }
     },
 
     "compilerOptions": {

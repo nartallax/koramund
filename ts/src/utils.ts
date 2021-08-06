@@ -20,3 +20,22 @@ export function isWaitShutdownSequenceItem(item: Koramund.ShutdownSequenceItem):
 export function nameOf<T>(k: keyof T & string): keyof T & string {
 	return k;
 }
+
+export function earlyExital(totalSleepTime: number, isDone: () => boolean, intervalLength = 1000): Promise<void>{
+	return new Promise(ok => {
+		
+		function check(){
+			if(isDone() || totalSleepTime <= 0){
+				ok();
+				return;
+			}
+
+			setTimeout(() => {
+				totalSleepTime -= intervalLength;
+				check();
+			}, Math.min(totalSleepTime, intervalLength));
+		}
+
+		check();
+	});
+}

@@ -16,7 +16,7 @@ export interface ProcessOptions {
 
 const defaultShutdownSequence: ReadonlyArray<Koramund.ShutdownSequenceItem> = [
 	{signal: "SIGINT"},
-	{wait: 60},
+	{wait: 60000},
 	{signal: "SIGKILL"}
 ];
 
@@ -26,7 +26,10 @@ const defaultShutdownSequence: ReadonlyArray<Koramund.ShutdownSequenceItem> = [
 export class ProcessController implements Koramund.ProcessController {
 
 	private proc: ChildProcess.ChildProcess | null = null;
-	readonly onLaunchCompleted = makeAsyncEvent();
+	// usercode deemed process launch to be completed, but we need do some final steps to actually make it completed
+	private readonly onLaunchMarkedCompleted = makeAsyncEvent();
+	// every part of the system considers the process to be fully launched
+	readonly onLaunchCompleted = makeAsyncEvent<Koramund.ProjectStartResult>();
 	readonly onStop = makeAsyncEvent<Koramund.ProcessStopEvent>();
 	readonly onStdout = makeAsyncEvent<string>();
 	readonly onStderr = makeAsyncEvent<string>();
@@ -42,18 +45,17 @@ export class ProcessController implements Koramund.ProcessController {
 	}
 
 	get state(): Koramund.ProcessRunState {
-		if(!this.proc){
-			return this.isStarting? "starting": "stopped";
-		} else {
-			return this.isStopping? "stopping": "running";
-		}
+		return this.isStopping? "stopping":
+			this.isStarting? "starting":
+			this.proc? "running":
+			"stopped";
 	}
 
 	async notifyLaunchCompleted(): Promise<void> {
-		await this.onLaunchCompleted.fire();
+		await this.onLaunchMarkedCompleted.fire();
 	}
 
-	private async withWaitLogging(actionName: string, action: () => Promise<void>): Promise<void> {
+	private async withWaitLogging<T>(actionName: string, action: () => Promise<T>): Promise<T> {
 		let startedAt = Date.now();
 		let interval = setInterval(() => {
 			let timePassed = Date.now() - startedAt;
@@ -84,8 +86,9 @@ export class ProcessController implements Koramund.ProcessController {
 		switch(state){
 			case "stopped":
 				if(!couldAlreadyBeStoppingOrStopped){
-					this.opts.logger.logTool("Stop requested, but no process is running. Won't do anything.")
+					this.opts.logger.logTool("Stop requested, but no process is running. Won't do anything.");
 				}
+				this.isStopping = false;
 				return;
 			case "starting":
 				await this.onLaunchCompleted.wait();
@@ -116,14 +119,19 @@ export class ProcessController implements Koramund.ProcessController {
 			for(let i = shouldSkipFirst? 1: 0; i < shutdownSequence.length; i++){
 				const action = shutdownSequence[i];
 				if(isSignalShutdownSequenceItem(action)){
-					// let's allow some freedom about signal name case
-					let signal = action.signal.toUpperCase() as NodeJS.Signals;
-					proc.kill(signal);
+					proc.kill(action.signal);
 				} else if(isWaitShutdownSequenceItem(action)){
-					let isStopped = await Promise.race([
-						new Promise<boolean>(ok => setTimeout(() => ok(false), Math.ceil(action.wait * 1000))),
-						stopPromise
-					]);
+					let timeoutHandle: NodeJS.Timeout | null = null;
+					let timerPromise = new Promise<boolean>(ok => {
+						timeoutHandle = setTimeout(() => ok(false), action.wait);
+					});
+
+					let isStopped = await Promise.race([ timerPromise, stopPromise ]);
+
+					if(timeoutHandle){
+						clearTimeout(timeoutHandle);
+					}
+
 					if(isStopped){
 						return;
 					}
@@ -135,10 +143,10 @@ export class ProcessController implements Koramund.ProcessController {
 		});
 	}
 
-	async start(): Promise<void> {
+	async start(): Promise<Koramund.ProjectStartResult> {
 		if(this.isStarting){
 			this.opts.logger.logTool("Requested start more than once simultaneously. Will only start once.");
-			return;
+			return await this.onLaunchCompleted.wait();
 		}
 		let state = this.state;
 		this.isStarting = true;
@@ -146,25 +154,23 @@ export class ProcessController implements Koramund.ProcessController {
 		switch(state){
 			case "running":
 				this.opts.logger.logTool("Start requested, but the process is already running. Won't do anything.")
-				return;
+				return { type: "already_running" }
 			case "starting": // wtf? how could this even happen
-			this.opts.logger.logTool("Start requested, but the process is already starting. Won't initiate start second time.")
-				await this.onLaunchCompleted.wait();
+				this.opts.logger.logTool("Start requested, but the process is already starting. Won't initiate start second time.")
+				return await this.onLaunchCompleted.wait();
 				// clear hasUserInitiatedStart here...? don't know, it's unobvious how this could happen at all
-				return;
 			case "stopping":
 				await this.onStop.wait();
 				break;
 		}
 
-		let launchPromise = this.onLaunchCompleted.wait();
-		let launchCommand = await Promise.resolve(this.opts.getLaunchCommand());
-
-		await this.withWaitLogging("launch", async () => {
+		let launchMarkedCompletedPromise = this.onLaunchMarkedCompleted.wait();
+		return await this.withWaitLogging<Koramund.ProjectStartResult>("launch", async () => {
 			if(this.proc){
+				// should not happen really
 				this.opts.logger.logTool("Start requested, but some process is already running in state " + this.state + ". Won't start second time.");
 				this.isStarting = false;
-				return;
+				return {type: "invalid_state"};
 			}
 
 			try {
@@ -172,9 +178,13 @@ export class ProcessController implements Koramund.ProcessController {
 			} catch(e){
 				this.opts.logger.logTool("Could not start process: " + (e.message || e))
 				this.isStarting = false;
-				return;
+				return {type: "invalid_state"};
 			}
 			
+			// launch command must be acquired after onBeforeStart
+			// because in getLaunchCommand imploder should be available
+			// and imploder projects launch imploder instance only in onBeforeStart
+			let launchCommand = await Promise.resolve(this.opts.getLaunchCommand());
 			this.proc = await this.opts.shell.startProcess({
 				command: launchCommand,
 				onStdout: !this.opts.shouldCaptureStdout? undefined: line => {
@@ -187,20 +197,28 @@ export class ProcessController implements Koramund.ProcessController {
 				},
 				onExit: (code, signal) => {
 					this.proc = null;
-					if(!this.isStopping){
-						// if nothing waits for shutdown event - the shutdown is considered unexpected
-						this.opts.logger.logTool("Process unexpectedly " + (signal? "stopped with signal " + signal: "exited with code " + code));
-					}
 					let expected = this.isStopping
 					this.isStopping = false;
+					if(!expected){
+						this.opts.logger.logTool("Process unexpectedly " + (signal? "stopped with signal " + signal: "exited with code " + code));
+					}
 					this.onStop.fire({ code, signal, expected });
 				}
 			});
 
 			await this.onProcessCreated.fire({process: this.proc});
 
-			await launchPromise;
+			await Promise.race([
+				launchMarkedCompletedPromise,
+				this.onStop.wait()
+			]);
 			this.isStarting = false;
+
+			let result: Koramund.ProjectStartResult = {type: "started"}
+			if(this.proc){
+				await this.onLaunchCompleted.fire(result);
+			}
+			return result;
 		});
 	}
 

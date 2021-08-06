@@ -29,6 +29,26 @@ export function createHttpProxifyableProject<P extends Koramund.HttpProxifyableP
 		}
 	}
 
+	proxy.onBeforeHttpRequest(async () => {
+		while(proj.process.state !== "running"){
+			switch(proj.process.state){
+				case "starting":
+					await proj.process.onLaunchCompleted.wait();
+					break;
+				case "stopped": {
+					let result = await proj.start();
+					if(result.type === "invalid_state"){
+						throw new Error("Project could not be launched in this state, HTTP request failed.");
+					}
+					break;
+				}
+				case "stopping":
+					await proj.onStop.wait();
+					// expecting to loopback to "stopped" or "started"
+					break;
+			}
+		}
+	})
 	proj.process.onBeforeStart(() => proxy.start());
 	proj.onShutdown(() => proxy.stop())
 

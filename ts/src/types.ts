@@ -15,6 +15,9 @@ import {ProjectController} from "project_controller";
 // при бесконечно не останавливающемся процессе логгер будет бесконечно логгировать то, что процесс не останавливается
 // написать тесты на разнообразные сигналы (kill, например), а затем гонять их на винде
 // при шатдауне не запущенные процессы не жалуются на то, что они не запущенные
+// имплодер можно гонять в режиме одиночной сборки
+// имплодер можно гонять в вотчмоде
+// ленивый запуск проектов с http-прокси?
 
 export namespace Koramund {
 
@@ -30,24 +33,18 @@ export namespace Koramund {
 	
 	/** An initial entrypoint for any action in framework */
 	export interface ProjectController {
-		addProject(p: BaseProjectParams): 
-			BaseProject<BaseProjectParams>;
-		addProject(p: ImploderProjectParams): 
-			BaseProject<ImploderProjectParams> & ImploderProject
-		addProject(p: LaunchableProjectParams): 
-			BaseProject<LaunchableProjectParams> & LaunchableProject
-		addProject(p: ImploderProjectParams & LaunchableProjectParams): 
-			BaseProject<ImploderProjectParams & LaunchableProjectParams> & ImploderProject & LaunchableProject
-		addProject(p: HttpProxifyableProjectParams): 
-			BaseProject<HttpProxifyableProjectParams> & HttpProxifyableProject
-		addProject(p: ImploderProjectParams & HttpProxifyableProjectParams): 
-			BaseProject<ImploderProjectParams & HttpProxifyableProjectParams> & ImploderProject & HttpProxifyableProject
+		addProject(p: BaseProjectParams): BaseProject<BaseProjectParams>;
+		addProject(p: ImploderProjectParams): ImploderProject
+		addProject(p: LaunchableProjectParams): LaunchableProject
+		addProject(p: ImploderProjectParams & LaunchableProjectParams): ImploderProject & LaunchableProject
+		addProject(p: HttpProxifyableProjectParams): HttpProxifyableProject
+		addProject(p: ImploderProjectParams & HttpProxifyableProjectParams): ImploderProject & HttpProxifyableProject
 
 		/** Path to NodeJS executable that runs the tool */
 		readonly nodePath: string;
 
 		/** Build all the buildable projects */
-		buildAll(buildType?: Koramund.BuildType): Promise<BuildResult[]>;
+		buildAll(): Promise<BuildResult[]>;
 
 		/** Gracefully stop all the running processes
 		 * You probably don't need to invoke this explicitly,
@@ -65,25 +62,25 @@ export namespace Koramund {
 		/** Shell helper with default working directory = program working directory */
 		readonly shell: ShellHelper;
 		readonly logger: Logger
+
+		/** Stop the project process, if present, and release all related resources (compiler, proxy etc) */
+		shutdown(): Promise<void>;
 	}
 
-	export interface LaunchableProject {
-		/** Controller for the process of the project. Could be null if project is not launchable */
-		readonly process: ProcessController | null;
+	export interface LaunchableProject<P extends LaunchableProjectParams = LaunchableProjectParams> extends BaseProject<P> {
+		/** Controller for the process of the project. */
+		readonly process: ProcessController;
 		/** Should be invoked when launch is in progress to notify the project about its launch status */
 		notifyLaunched(): void;
 
 		/** Start the project. Promise resolves when the project is started completely, i.e. after notifyLaunched() is invoked */
-		start(): Promise<void>;
+		start(): Promise<ProjectStartResult>;
 		
 		/** Stop the project. Resolves when process exits.
 		 * Note 1: it does not directly linked with shutdown sequence. Process may exit earlier or later.
 		 * Note 2: it does not imply complete project shutdown. Just the process.
 		 * Some resources may still remain loaded, like project's compiler, http proxy and so on. */
 		stop(): Promise<void>;
-
-		/** Stop the project and release all related resources (compiler, proxy etc) */
-		shutdown(): Promise<void>;
 
 		/** stop() and then start(). Won't complain if project is not launched, so can be used as better start() variant */
 		restart(): Promise<void>;
@@ -93,7 +90,7 @@ export namespace Koramund {
 		/** New process just created for this project */
 		onProcessCreated: AsyncEvent<ProcessCreatedEvent>;
 		/** Startup completed (notifyLaunched invoked) */
-		onStarted: AsyncEvent;
+		onStarted: AsyncEvent<ProjectStartResult>;
 		/** Process terminated */
 		onStop: AsyncEvent<ProcessStopEvent>;
 		/** A line appears on stdout of the process */
@@ -103,26 +100,25 @@ export namespace Koramund {
 	}
 
 	/** A project buildable with Imploder. */
-	export interface ImploderProject {
-		/** Imploder context of the project. Null means not started yet */
-		readonly imploder: Imploder.Context | null;
+	export interface ImploderProject<P extends ImploderProjectParams = ImploderProjectParams> extends BaseProject<P> {
+		/** Imploder context of the project. Null means not started yet
+		 * Note that non-null answer only possible if Imploder is in watch mode. One-time run Imploder instances are not stored. */
+		getImploderOrNull(): Imploder.Context | null;
+
+		/** Same as imploderOrNull; throws on null */
+		getImploder(): Imploder.Context;
 
 		/** Build project.
-		 * Default build type is release, because in development builds are performed automatically */
-		build(buildType?: BuildType): Promise<BuildResult>;
-
-		/** Start Imploder instance. Will return running instance if already started.
-		 * Is not nessessary to call before start() or build(), as they will call this on its own.
-		 * Should be called in case of development of in-browser projects, which won't really "start" on their own.
-		 * Best runs with lazyStart Imploder option, allowing to postpone actual start of compiler. */
-		startImploder(): Promise<Imploder.Context>;
+		 * Is invoked implicitly before project restarts, if the project is also launchable.
+		 * After that imploder is guaranteed to be started. */
+		build(): Promise<BuildResult>
 
 		/** A build of the project is finished. Note that the build could be unsuccessful. */
 		onBuildFinished: AsyncEvent<BuildResult>;
 	}
 
 	/** A launchable project that has HTTP interface and is able to be proxifyed for this interface */
-	export interface HttpProxifyableProject extends LaunchableProject {
+	export interface HttpProxifyableProject<P extends HttpProxifyableProjectParams = HttpProxifyableProjectParams> extends LaunchableProject<P> {
 		/** Set the TCP port last launched program instance listens on with HTTP server.
 		 * Best set when program is starting. Could be different for different launches
 		 * It is highly recommended in development to bind on random port and parse this port's number from stdin/stderr.
@@ -181,13 +177,13 @@ export namespace Koramund {
 
 	export interface ImploderProjectParams extends BaseProjectParams {
 		/** Path to tsconfig.json of Imploder project */
-		readonly tsconfigPath: string;
+		readonly imploderTsconfigPath: string;
 
 		/** Name of Imploder profile. Profiles are specified in tsconfig.json
 		 * This profile will be used when tool is trying to be built.
 		 * Tool will launch Imploder on release build (expects single-time build) 
 		 * and before process start/restart (expects watch mode) */
-		readonly profile?: string;
+		readonly imploderProfile?: string;
 	}
 
 	export interface Logger {
@@ -214,11 +210,8 @@ export namespace Koramund {
 	export type RoArrayOrSingle<T> = ReadonlyArray<T> | T;
 	export type PromiseOrValue<T> = Promise<T> | T;
 
-	export type BuildType = "development" | "release";
-
 	export interface BuildResult<T = ImploderProject> {
 		success: boolean;
-		type: BuildType;
 		project: T;
 	}
 
@@ -255,6 +248,7 @@ export namespace Koramund {
 
 	/** Action "wait" */
 	export interface WaitShutdownSequenceItem {
+		/** How long to wait in milliseconds */
 		wait: number;
 	}
 
@@ -313,6 +307,14 @@ export namespace Koramund {
 		once(handler: (value: T) => PromiseOrValue<unknown>): void;
 		detach(handler: (value: T) => PromiseOrValue<unknown>): void;
 		wait(): Promise<T>;
+	}
+
+	export interface ProjectStartResult {
+		/** Type of start result outcome.
+		 * started = launched successfully, running
+		 * already_running = was already running at the time of invocation, no action was performed
+		 * invalid_state = process could not be launched from current project state (could not compile, for instance) */
+		readonly type: "started" | "already_running" | "invalid_state";
 	}
 
 }

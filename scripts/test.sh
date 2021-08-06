@@ -4,5 +4,6 @@ set -e
 cd `dirname "$0"`
 cd ..
 
-./node_modules/.bin/imploder --tsconfig tsconfig.tests.json
-node js/test.js "$1"
+rm -rf target
+./node_modules/.bin/imploder --tsconfig tsconfig.json --profile test
+node target/koramund_test.js "$@"

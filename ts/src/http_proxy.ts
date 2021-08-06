@@ -16,6 +16,7 @@ export class WrappingHttpProxy {
 	private readonly server: http.Server;
 	private readonly wsServer: Websocket.server;
 	readonly onHttpRequest = makeAsyncEvent<Koramund.HttpRequest>();
+	readonly onBeforeHttpRequest = makeAsyncEvent();
 	readonly onWebsocketConnectStarted = makeAsyncEvent<Koramund.WebsocketConnectionEvent>();
 	readonly onWebsocketConnected = makeAsyncEvent<Koramund.WebsocketConnectionEvent>();
 	readonly onWebsocketDisconnect = makeAsyncEvent<Koramund.WebsocketDisconnectEvent>();
@@ -304,6 +305,15 @@ export class WrappingHttpProxy {
 	}
 
 	private async handle(inReq: http.IncomingMessage, inResp: http.ServerResponse): Promise<void> {
+
+		try {
+			await this.onBeforeHttpRequest.fire();
+		} catch(e){
+			this.opts.logger.logTool("HTTP request could not be delivered: " + e.message);
+			inResp.destroy();
+			inReq.destroy();
+			return;
+		}
 
 		let bodyCallBuffer = new CallBuffer<Buffer>(() => new Promise((ok, bad) => {
 			let arr: Buffer[] = [];

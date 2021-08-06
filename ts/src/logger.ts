@@ -20,7 +20,7 @@ export class Logger {
 	}
 
 	setNameLength(len: number): void {
-		this.vals.paddedName = this.vals.paddedName.trim().padEnd(len, " ");
+		this.vals.paddedName = this.vals.project.name.trim().padEnd(len, " ");
 		this.vals.maxNameLength = len;
 	}
 

@@ -1,10 +1,13 @@
+import {AsyncEvent, makeAsyncEvent} from "async_event";
 import {Logger} from "logger";
 import {ShellRunner} from "shell_runner";
 import {Koramund} from "types";
 
 export interface BaseProjectInternal<P extends Koramund.BaseProjectParams = Koramund.BaseProjectParams> extends Koramund.BaseProject<P> {
 	logger: Logger;
-	shell: ShellRunner
+	shell: ShellRunner;
+	shutdown(withSignal?: NodeJS.Signals): Promise<void>;
+	onShutdown: AsyncEvent<NodeJS.Signals | undefined>;
 }
 
 export function createBaseProject<P extends Koramund.BaseProjectParams>(params: P, controllerParams: Koramund.ProjectControllerOptions): BaseProjectInternal<P> {
@@ -20,7 +23,12 @@ export function createBaseProject<P extends Koramund.BaseProjectParams>(params: 
 		name: params.name,
 		params: params,
 		shell: new ShellRunner(workingDirectory, logger),
-		logger: logger
+		logger: logger,
+
+		onShutdown: makeAsyncEvent(),
+		async shutdown(withSignal?: NodeJS.Signals): Promise<void> {
+			await this.onShutdown.fire(withSignal);
+		}
 	}
 
 	return proj;

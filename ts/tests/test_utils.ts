@@ -1,7 +1,8 @@
-import * as http from "http";
-import {promises as fs} from "fs";
-import * as path from "path";
+import * as Http from "http";
+import {promises as Fs} from "fs";
+import * as Path from "path";
 import {Logger} from "logger";
+import {Koramund} from "types";
 
 export async function expectError<T>(msg: string | null, action: () => T | Promise<T>): Promise<void>{
 	let hadException = false;
@@ -19,20 +20,20 @@ export async function expectError<T>(msg: string | null, action: () => T | Promi
 	}
 }
 
-export async function rmRf(rootPath: string): Promise<void> {
-	let stat = await fs.stat(rootPath);
+async function rmRf(rootPath: string): Promise<void> {
+	let stat = await Fs.stat(rootPath);
 	if(stat.isDirectory()){
-		let proms = (await fs.readdir(rootPath)).map(name => {
-			return rmRf(path.resolve(rootPath, name));	
+		let proms = (await Fs.readdir(rootPath)).map(name => {
+			return rmRf(Path.resolve(rootPath, name));	
 		});
 		await Promise.all(proms);
-		await fs.rmdir(rootPath);
+		await Fs.rmdir(rootPath);
 	} else {
-		await fs.unlink(rootPath);
+		await Fs.unlink(rootPath);
 	}
 }
 
-export async function rmRfIgnoreEnoent(rootPath: string): Promise<void>{
+async function rmRfIgnoreEnoent(rootPath: string): Promise<void>{
 	try {
 		await rmRf(rootPath);
 	} catch(e){
@@ -42,9 +43,9 @@ export async function rmRfIgnoreEnoent(rootPath: string): Promise<void>{
 	}
 }
 
-export async function mkdirIgnoreEexist(dirPath: string): Promise<void>{
+async function mkdirIgnoreEexist(dirPath: string): Promise<void>{
 	try {
-		await fs.mkdir(dirPath);
+		await Fs.mkdir(dirPath);
 	} catch(e){
 		if(e.code !== "EEXIST"){
 			throw e;
@@ -52,22 +53,22 @@ export async function mkdirIgnoreEexist(dirPath: string): Promise<void>{
 	}
 }
 
-export async function copyRecursive(fromPath: string, toPath: string): Promise<void> {
-	let stat = await fs.stat(fromPath);
+async function copyRecursive(fromPath: string, toPath: string): Promise<void> {
+	let stat = await Fs.stat(fromPath);
 	if(stat.isDirectory()){
 		await mkdirIgnoreEexist(toPath);
-		let proms = (await fs.readdir(fromPath)).map(name => {
-			return copyRecursive(path.resolve(fromPath, name), path.resolve(toPath, name));
+		let proms = (await Fs.readdir(fromPath)).map(name => {
+			return copyRecursive(Path.resolve(fromPath, name), Path.resolve(toPath, name));
 		});
 		await Promise.all(proms);
 	} else {
-		await fs.copyFile(fromPath, toPath);
+		await Fs.copyFile(fromPath, toPath);
 	}
 }
 
 export function httpReq(args: {port: number, path?: string, body?: string, method?: string}): Promise<{code: number, body: string}> {
 	return new Promise((ok, bad) => {
-		let req = http.request({
+		let req = Http.request({
 			host: "localhost",
 			port: args.port,
 			path: args.path,
@@ -88,62 +89,40 @@ export function httpReq(args: {port: number, path?: string, body?: string, metho
 
 }
 
-export function shouldBeEqual<T>(context: string, ethalon: T, value: T): void {
-	if(value !== ethalon){
-		throw new Error(`Values of ${context} are not equal: expected ${ethalon}, got ${value}`);
+export function waitLoggerLine(logger: Koramund.Logger, regexp: RegExp): Promise<string>{
+	if(!(logger instanceof Logger)){
+		throw new Error("WUT");
 	}
-}
-
-export function waitPromiseForLimitedTime<T>(x: T | Promise<T>, timeMs: number, errorMessage?: string): Promise<T>{
-	return promiseWithTimeout(x, timeMs, errorMessage, false) as Promise<T>;
-}
-
-export async function waitNoResolutionForLimitedTime<T>(x: T | Promise<T>, timeMs: number, errorMessage?: string): Promise<void>{
-	await promiseWithTimeout(x, timeMs, errorMessage, true);
-}
-
-function promiseWithTimeout<T>(x: T | Promise<T>, timeMs: number, errorMessage?: string, expectNoResolution?: boolean): Promise<T | null>{
-	return new Promise((ok, bad) => {
-		let completed = false;
-		setTimeout(() => {
-			if(!completed){
-				completed = true;
-				if(expectNoResolution){
-					ok(null);
-				} else {
-					bad(new Error(errorMessage || "Timeout"))
-				}
-			}
-		}, timeMs);
-		Promise.resolve(x).then(
-			result => {
-				if(!completed){
-					completed = true;
-					if(expectNoResolution){
-						bad(errorMessage || "Promise resolved, but we expected it not to.")
-					} else {
-						ok(result);
-					}
-				}
-			},
-			e => {
-				if(!completed){
-					completed = true;
-					bad(e)
-				}
-			}
-		);
-	});
-}
-
-export function waitLine(logger: Logger, regexp: RegExp): Promise<string>{
 	return new Promise(ok => {
-		let handler = (line: string) => {
-			if(line.match(regexp)){
+		let handler = (line: Koramund.LoggingLineOptions) => {
+			if(line.message.match(regexp)){
 				logger.onLine.detach(handler);
-				ok(line);
+				ok(line.message);
 			}
 		}
-		logger.onLine.listen(handler);
+		logger.onLine(handler);
 	});
+}
+
+export const testProjectsDirectory = "./test_projects_temp_dir_for_tests"
+
+export function testPath(subpath: string): string {
+	return Path.resolve(testProjectsDirectory, subpath);
+}
+
+export async function withTestProjectCopy<T>(action: (controller: Koramund.ProjectController) => T | Promise<T>): Promise<T>{ 
+	await rmRfIgnoreEnoent(testProjectsDirectory)
+	await copyRecursive("./test_projects", testProjectsDirectory);
+	let controller = Koramund.create({
+		log: opts => {
+			console.error(`${opts.paddedProjectName} | ${opts.message}`)
+		}
+	});
+
+	try {
+		return await Promise.resolve(action(controller));
+	} finally {
+		await controller.shutdown();
+		await rmRfIgnoreEnoent(testProjectsDirectory);
+	}
 }

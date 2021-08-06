@@ -1,6 +1,7 @@
 import {Imploder} from "@nartallax/imploder";
 import {AsyncEvent, makeAsyncEvent} from "async_event";
 import {BaseProjectInternal} from "base_project";
+import {CallBuffer} from "call_buffer";
 import {isLaunchableProject} from "launchable_project";
 import {Koramund} from "types";
 
@@ -10,57 +11,72 @@ export interface ImploderProjectInternal extends Koramund.ImploderProject {
 
 export function createImploderProject<P extends Koramund.ImploderProjectParams>(base: BaseProjectInternal<P>): BaseProjectInternal<P> & ImploderProjectInternal {
 
-	let _imploder: Promise<Imploder.Context> | Imploder.Context | null = null;
+	let imploderStorage = new CallBuffer<Imploder.Context>(async () => {
+		base.logger.logTool("Launching Imploder.");
+		let imploder = await Imploder.runFromTsconfig(base.params.imploderTsconfigPath, {
+			profile: base.params.imploderProfile,
+			writeLogLine: str => base.logger.logTool(str)
+		});
+		await imploder.compiler.waitBuildEnd()
+		return imploder;
+	});
 
 	let proj: BaseProjectInternal<P> & ImploderProjectInternal = {
 		...base,
 
 		onBuildFinished: makeAsyncEvent<Koramund.BuildResult>(),
 
-		get imploder(): Imploder.Context | null {
-			return !_imploder || _imploder instanceof Promise? null: _imploder;
+		getImploderOrNull(): Imploder.Context | null {
+			return imploderStorage.getValueOrNull();
 		},
 
-		async startImploder(): Promise<Imploder.Context> {
-			if(_imploder === null){
-				this.logger.logTool("Launching Imploder.");
-				_imploder = Imploder.runFromTsconfig(this.params.tsconfigPath, {
-					profile: this.params.profile,
-					writeLogLine: str => this.logger.logTool(str)
-				});
+		getImploder(): Imploder.Context {
+			let result = this.getImploderOrNull();
+			if(!result){
+				throw new Error("Have no Imploder instance, but expected to.");
 			}
-	
-			if(_imploder instanceof Promise){
-				_imploder = await _imploder;
-			}
-	
-			return _imploder;
+			return result;
 		},
 
-		async build(buildType: Koramund.BuildType = "release"): Promise<Koramund.BuildResult>{
-			let imploder = await this.startImploder();
-			await imploder.compiler.waitBuildEnd();
+		async build(): Promise<Koramund.BuildResult>{
+			let imploder: Imploder.Context;
+			if(imploderStorage.hasValue()){
+				imploder = imploderStorage.getValue();
+				if(!imploder.config.watchMode){
+					await imploder.compiler.run();
+				} else {
+					await imploder.compiler.waitBuildEnd();
+				}
+			} else {
+				imploder = await imploderStorage.get();
+			}
+
 			if(!imploder.compiler.lastBuildWasSuccessful){
-				let result: Koramund.BuildResult = {success: false, type: buildType, project: this};
+				let result: Koramund.BuildResult = {success: false, project: this};
 				await this.onBuildFinished.fire(result)
 				return result;
 			}
 			await imploder.bundler.produceBundle();
-			let result: Koramund.BuildResult = {success: true, type: buildType, project: this};
+			let result: Koramund.BuildResult = {success: true, project: this};
 			await this.onBuildFinished.fire(result)
 			return result;
 		}
 
 	}
 
+	proj.onShutdown(async () => {
+		if(imploderStorage.hasValue()){
+			await Promise.resolve(imploderStorage.getValue().compiler.stop());
+		}
+	});
+
 	if(isLaunchableProject(proj)){
-		proj.process.onBeforeStart(() => proj.build());
-		proj.onShutdown(async () => {
-			let imploder = proj.imploder;
-			if(imploder){
-				await Promise.resolve(imploder.compiler.stop());
+		proj.process.onBeforeStart(async () => {
+			let res = await proj.build()
+			if(!res.success){
+				throw new Error("Build is not successful.");
 			}
-		})
+		});
 	}
 
 	return proj;
@@ -72,5 +88,5 @@ export function isImploderProject<P extends Koramund.BaseProjectParams>(project:
 }
 
 export function isImploderProjectParams(params: Koramund.BaseProjectParams): params is Koramund.ImploderProjectParams {
-	return typeof((params as Koramund.ImploderProjectParams).tsconfigPath) === "string";
+	return typeof((params as Koramund.ImploderProjectParams).imploderTsconfigPath) === "string";
 }
