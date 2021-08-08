@@ -38,6 +38,11 @@ export namespace Koramund {
 		 * as this signal is probably already passed to the child processes by OS
 		 * and it needed to be taken into account */
 		shutdown(signal?: NodeJS.Signals): Promise<void>;
+
+		/** Roughly stop all the running processes.
+		 * Same as shutdown(), but won't use shutdown sequences and will just SIGKILL everything.
+		 * Therefore could potentially lead to absense of proper cleanup. */
+		shutdownRough(): Promise<void>
 	}
 
 	/** Common part of any project */

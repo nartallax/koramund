@@ -58,8 +58,7 @@ export class ShellRunner implements Koramund.ShellHelper {
 		}
 		let proc = ChildProcess.spawn(opts.command[0], opts.command.slice(1), { 
 			cwd: this.workingDirectory,
-			stdio: ["ignore", opts.onStdout? "pipe": "ignore", opts.onStderr? "pipe": "ignore"],
-			gid: process.getgid()
+			stdio: ["ignore", opts.onStdout? "pipe": "ignore", opts.onStderr? "pipe": "ignore"]
 		});
 
 		proc.on("error", err => {

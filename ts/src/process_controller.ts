@@ -75,12 +75,17 @@ export class ProcessController implements Koramund.ProcessController {
 
 	stopImmediatelyAndRough(): void {
 		if(this.proc){
-			this.proc.kill("SIGKILL");
+			sendSignal(this.proc, "SIGKILL");
 		}
 	}
 
 	async stop(couldAlreadyBeStoppingOrStopped?: boolean, skipFirstSignal?: NodeJS.Signals): Promise<void>{
-		if(this.isStopping){
+		if(!this.proc) {
+			if(!couldAlreadyBeStoppingOrStopped){
+				this.opts.logger.logTool(`Stop requested, but no process is running. Won't do anything.`)
+			}
+			return;
+		} else if(this.isStopping){
 			if(!couldAlreadyBeStoppingOrStopped){
 				this.opts.logger.logTool("Stop requested, but the process is already stopping.")
 			}
@@ -89,9 +94,6 @@ export class ProcessController implements Koramund.ProcessController {
 		} else if(this.isStarting){
 			this.isStopping = true;
 			await this.onLaunchCompleted.wait();
-		} else if(!this.proc) {
-			this.opts.logger.logTool(`Stop requested, but no process is running. Won't do anything.`)
-			return;
 		} else {
 			this.isStopping = true;
 		}
@@ -108,7 +110,10 @@ export class ProcessController implements Koramund.ProcessController {
 			for(let i = shouldSkipFirst? 1: 0; i < shutdownSequence.length; i++){
 				const action = shutdownSequence[i];
 				if(isSignalShutdownSequenceItem(action)){
-					this.sendSignal(action.signal);
+					if(!this.proc){
+						return;
+					}
+					sendSignal(this.proc, action.signal);
 				} else if(isWaitShutdownSequenceItem(action)){
 					let timeoutHandle: NodeJS.Timeout | null = null;
 					let timerPromise = new Promise<boolean>(ok => {
@@ -204,25 +209,8 @@ export class ProcessController implements Koramund.ProcessController {
 		});
 	}
 
-	private sendSignal(signal: NodeJS.Signals): void {
-		let proc = this.proc;
-		if(!proc){
-			throw new Error(`Could not send signal ${signal} to process: no process!`);
-		}
+}
 
-		if(process.platform !== "win32"){
-			proc.kill(signal);
-			return;
-		}
-	
-		if(signal === "SIGINT" || signal === "SIGTERM"){
-			this.opts.shell.runCommand(`taskkill /pid ${proc.pid}`)
-		} else if(signal === "SIGKILL"){
-			proc.kill();
-		} else {
-			this.opts.logger.logTool(`Could not send signal ${signal} on Windows. Will just force-kill the process.`);
-			proc.kill();
-		}
-	}
-
+function sendSignal(proc: ChildProcess.ChildProcess, signal: NodeJS.Signals){
+	proc.kill(process.platform === "win32"? undefined: signal);
 }

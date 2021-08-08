@@ -65,13 +65,26 @@ export class ProjectController implements Koramund.ProjectController {
 		return result;
 	}
 
-	async shutdown(signal?: NodeJS.Signals): Promise<void> {
+	shutdownRough(): Promise<void> {
+		return this.shutdownInternal(proj => {
+			if(isLaunchableProject(proj)){
+				proj.process.stopImmediatelyAndRough();
+			}
+			return proj.shutdown()
+		})
+	}
+
+	shutdown(signal?: NodeJS.Signals): Promise<void> {
+		return this.shutdownInternal(proj => proj.shutdown(signal))
+	}
+
+	private async shutdownInternal(action: (proj: BaseProjectInternal) => Promise<void>): Promise<void> {
 		if(!this.opts.preventSignalHandling){
 			this.clearSignalHandling();
 		}
 		await Promise.all(this.projects.map(async project => {
 			try {
-				await project.shutdown(signal)
+				await action(project);
 			} catch(e){
 				project.logger.logTool("Failed to shutdown gracefully: " + e.message);
 			}

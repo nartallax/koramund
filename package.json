@@ -16,7 +16,7 @@
     "pub": "scripts/publish.sh"
   },
   "dependencies": {
-    "@nartallax/imploder": "^1.1.1",
+    "@nartallax/imploder": "^1.1.2",
     "ws": "^8.0.0"
   },
   "devDependencies": {

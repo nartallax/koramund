@@ -122,7 +122,10 @@ export async function withTestProjectCopy<T>(action: (controller: Koramund.Proje
 	try {
 		return await Promise.resolve(action(controller));
 	} finally {
+		console.error("test shutdown start");
 		await controller.shutdown();
+		console.error("testdir rmrf");
 		await rmRfIgnoreEnoent(testProjectsDirectory);
+		console.error("test shutdown end");
 	}
 }
