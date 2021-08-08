@@ -24,7 +24,7 @@ test("crossconditions", assert => withTestProjectCopy(async controller => {
 	summator.onStderr(line => {
 		let portMatch = line.match(/Started on port (\d+)/);
 		if(portMatch){
-			summator.notifyProcessHttpPort(parseInt(portMatch[1]));
+			summator.notifyProjectHttpPort(parseInt(portMatch[1]));
 			summator.notifyLaunched();
 		}
 	});
@@ -51,7 +51,7 @@ test("crossconditions", assert => withTestProjectCopy(async controller => {
 	multiplier.onStderr(line => {
 		let portMatch = line.match(/Started on port (\d+)/);
 		if(portMatch){
-			multiplier.notifyProcessHttpPort(parseInt(portMatch[1]));
+			multiplier.notifyProjectHttpPort(parseInt(portMatch[1]));
 			multiplier.notifyLaunched();
 		}
 	});

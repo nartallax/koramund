@@ -1,23 +1,8 @@
 import * as Http from "http";
-import * as Websocket from "websocket";
+import * as Ws from "ws";
 import * as ChildProcess from "child_process";
 import {Imploder} from "@nartallax/imploder";
 import {ProjectController} from "project_controller";
-
-// workingDirectory авторезолвится при tsconfigPath
-// setMaxNameLength у логгеров
-
-// тесты:
-// можно прочесть все тело в обработчике http-запроса, и оно будет передано вызываемому серверу
-// можно не читать тело в обработчике http-запроса, и оно будет потоково застримлено серверу
-// вебсокеты
-// можно запускать имплодер-проект без хттп прокси
-// при бесконечно не останавливающемся процессе логгер будет бесконечно логгировать то, что процесс не останавливается
-// написать тесты на разнообразные сигналы (kill, например), а затем гонять их на винде
-// при шатдауне не запущенные процессы не жалуются на то, что они не запущенные
-// имплодер можно гонять в режиме одиночной сборки
-// имплодер можно гонять в вотчмоде
-// ленивый запуск проектов с http-прокси?
 
 export namespace Koramund {
 
@@ -124,14 +109,25 @@ export namespace Koramund {
 		 * It is highly recommended in development to bind on random port and parse this port's number from stdin/stderr.
 		 * This way you can have same ports in development and in production: 
 		 * in development requests will be proxified by the tool, and in production they will be handled by project directly. */
-		notifyProcessHttpPort(port: number): void; 
+		notifyProjectHttpPort(port: number): void; 
+
+		/** Start a proxy without starting the rest of the project.
+		 * Is called automatically on first project start.
+		 * It is encouraged to lazy-start the projects, because this way randomly-selected ports will never be the same as proxy's. */
+		startHttpProxy(): Promise<void>;
+
+		/** Port on which HTTP proxy listens */
+		getProxyHttpPort(): number;
+		/** Port on which project process listens.
+		 * This is last value passed to notifyProcessHttpPort() */
+		getProjectHttpPort(): number;
 
 		/** Proxy receives HTTP request */
 		onHttpRequest: AsyncEvent<HttpRequest>;
 		/** Proxy receives websocket connect request */
-		onWebsocketConnectStarted: AsyncEvent<WebsocketConnectionEvent>;
+		onWebsocketConnectStarted: AsyncEvent<WebsocketConnectionStartEvent>;
 		/** Proxy connected incoming client connection to server */
-		onWebsocketConnected: AsyncEvent<WebsocketConnectionEvent>;
+		onWebsocketConnected: AsyncEvent<WebsocketConnectionCompletedEvent>;
 		/** Proxy detected disconnect of one of the parties */
 		onWebsocketDisconnected: AsyncEvent<WebsocketDisconnectEvent>;
 		/** Proxy got message from one of the parties */
@@ -222,8 +218,15 @@ export namespace Koramund {
 		getBody(): Promise<Buffer>;
 	}
 
-	export interface WebsocketConnectionEvent {
-		request: Websocket.request;
+	export interface WebsocketConnectionStartEvent {
+		clientConnection: Ws;
+		request: Http.IncomingMessage;
+	}
+
+	export interface WebsocketConnectionCompletedEvent {
+		serverConnection: Ws;
+		clientConnection: Ws;
+		request: Http.IncomingMessage;
 	}
 
 	export interface WebsocketDisconnectEvent {
@@ -234,7 +237,7 @@ export namespace Koramund {
 	}
 
 	export interface WebsocketMessageEvent {
-		message: Websocket.IMessage;
+		data: Ws.Data;
 		from: "client" | "server";
 	}
 

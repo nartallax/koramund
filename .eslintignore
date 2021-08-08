@@ -3,3 +3,4 @@ target
 js
 .eslintrc.js
 bin
+test_projects

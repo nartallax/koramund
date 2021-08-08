@@ -28,20 +28,27 @@ export class ProjectController implements Koramund.ProjectController {
 				let names = runningProjects.map(p => p.name).join(", ");
 				console.error("You really should NOT call process.exit() like this!\nThere could be processes still running (of project(s) " + names + "), which won't stop on their own. You now should stop them manually.\nBetter use shutdown() method of process controller, which will gracefully shut down all the processes. If it does not work - tweak your shutdown sequences.");
 			}
+			this.shutdown();
 			origExit.call(process, code);
 			throw new Error(`process.exit(${code}) did not shut down the process!`);
 		}
 	}
 
-	private setupSignalHandling(): void {
-		process.on("SIGINT", async signal => {
-			await this.shutdown(signal);
-		});
+	private onExit = (signal?: NodeJS.Signals) => {
+		this.shutdown(signal);
+	}
+	
 
-		process.on("exit", () => {
-			// it won't really do much
-			this.shutdown();
-		});
+
+	private setupSignalHandling(): void {
+		process.on("SIGINT", this.onExit);
+		// it won't really do much
+		process.on("exit", this.onExit);
+	}
+
+	private clearSignalHandling(): void {
+		process.off("SIGINT", this.onExit);
+		process.off("exit", this.onExit);
 	}
 
 	get nodePath(): string {
@@ -59,6 +66,9 @@ export class ProjectController implements Koramund.ProjectController {
 	}
 
 	async shutdown(signal?: NodeJS.Signals): Promise<void> {
+		if(!this.opts.preventSignalHandling){
+			this.clearSignalHandling();
+		}
 		await Promise.all(this.projects.map(async project => {
 			try {
 				await project.shutdown(signal)

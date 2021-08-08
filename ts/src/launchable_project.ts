@@ -30,7 +30,7 @@ export function createLaunchableProject<P extends Koramund.LaunchableProjectPara
 		onStdout: procController.onStdout,
 
 		async stop(withSignal?: NodeJS.Signals): Promise<void> {
-			this.process.stop(false, withSignal);
+			await this.process.stop(false, withSignal);
 		},
 
 		async restart(): Promise<void>{
@@ -45,11 +45,7 @@ export function createLaunchableProject<P extends Koramund.LaunchableProjectPara
 		},
 
 		async notifyLaunched(): Promise<void>{
-			if(this.process.state === "starting"){
-				await this.process.notifyLaunchCompleted();
-			} else {
-				this.logger.logTool("Detected completed launch of process, but the process is in " + this.process.state + " state (and not starting). Won't do anything.");
-			}
+			await this.process.notifyLaunchCompleted();
 		}
 
 	}

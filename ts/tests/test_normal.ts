@@ -19,7 +19,7 @@ async function defineProjects(controller: Koramund.ProjectController, profile: "
 	summator.onStderr(line => {
 		let portMatch = line.match(/Started on port (\d+)/);
 		if(portMatch){
-			summator.notifyProcessHttpPort(parseInt(portMatch[1]));
+			summator.notifyProjectHttpPort(parseInt(portMatch[1]));
 			summator.notifyLaunched();
 		}
 	});

@@ -1,5 +1,5 @@
-import * as http from "http";
-import * as Websocket from "websocket";
+import * as Http from "http";
+import * as Ws from "ws";
 import {Logger} from "logger";
 import {Koramund} from "types";
 import {CallBuffer} from "call_buffer";
@@ -13,12 +13,12 @@ export interface WrappingHttpProxyOptions {
 
 /** An HTTP proxy that wraps an other HTTP listener and allows to handle some network-related events about it */
 export class WrappingHttpProxy {
-	private readonly server: http.Server;
-	private readonly wsServer: Websocket.server;
+	private readonly server: Http.Server;
+	private readonly wsServer: Ws.Server;
 	readonly onHttpRequest = makeAsyncEvent<Koramund.HttpRequest>();
 	readonly onBeforeHttpRequest = makeAsyncEvent();
-	readonly onWebsocketConnectStarted = makeAsyncEvent<Koramund.WebsocketConnectionEvent>();
-	readonly onWebsocketConnected = makeAsyncEvent<Koramund.WebsocketConnectionEvent>();
+	readonly onWebsocketConnectStarted = makeAsyncEvent<Koramund.WebsocketConnectionStartEvent>();
+	readonly onWebsocketConnected = makeAsyncEvent<Koramund.WebsocketConnectionCompletedEvent>();
 	readonly onWebsocketDisconnect = makeAsyncEvent<Koramund.WebsocketDisconnectEvent>();
 	readonly onWebsocketMessage = makeAsyncEvent<Koramund.WebsocketMessageEvent>();
 	readonly startPromise = makeAsyncEvent();
@@ -31,12 +31,11 @@ export class WrappingHttpProxy {
 	targetHttpPort = -1;
 
 	constructor(private readonly opts: WrappingHttpProxyOptions) {
-		this.server = http.createServer(this.handle.bind(this));
-		this.wsServer = new Websocket.server({
-			httpServer: this.server,
-			autoAcceptConnections: false
-		});
-		this.wsServer.on("request", this.processWebsocketRequest.bind(this));
+		this.server = Http.createServer(this.handle.bind(this));
+		this.wsServer = new Ws.Server({
+			server: this.server
+		})
+		this.wsServer.on("connection", (socket, request) => this.processWebsocketConnection(socket, request));
 	}
 
 	async start(): Promise<void> {
@@ -106,75 +105,77 @@ export class WrappingHttpProxy {
 		});
 	}
 
-	private async processWebsocketRequest(req: Websocket.request): Promise<void> {
-		if(req.origin !== "localhost"){
-			this.opts.logger.logTool("Rejecting websocket request from origin \"" + req.origin + "\". Only localhost is allowed.");
-			req.reject();
-			return;
-		}
+	private async processWebsocketConnection(externalConn: Ws, req: Http.IncomingMessage): Promise<void> {
+		await this.onWebsocketConnectStarted.fire({ request: req, clientConnection: externalConn });
 
-		let client = new Websocket.client();
-		await this.onWebsocketConnectStarted.fire({ request: req });
-
-		client.on("connectFailed", err => {
-			this.opts.logger.logTool("Websocket proxy failed to connect: " + err);
-			req.reject(500, "Proxy-connection to target server failed.");
+		let reqUrl = new URL(req.url || "/", "http://localhost:" + this.opts.port);
+		let url = `ws://localhost:${this.targetHttpPort}${reqUrl.pathname}${reqUrl.search}`;
+		// websocket connection to project, opposed to externally initiated connection
+		let projectConn = new Ws(url, {
+			timeout: this.timeout,
+			protocol: externalConn.protocol
 		});
 
-		client.on("connect", async outConn => {
-			await this.onWebsocketConnected.fire({ request: req });
-			let inConn = req.accept(undefined, req.origin);
-
-			let lastError: Error | null = null;
-			outConn.on("error", err => {
-				this.opts.logger.logTool("Websocket proxy outcoming connection gave error: " + err);
+		let lastError: Error | null = null;
+		let connected = false;
+		projectConn.on("error", err => {
+			this.opts.logger.logTool("Websocket proxy connection to project gave error: " + err);
+			if(!connected){
+				externalConn.close(1001, "Websocket proxy failed to connect to project websocket server.");
+			} else {
 				lastError = err;
-				inConn.close();
-				outConn.close(); // drop..?
-			});
+				externalConn.close();
+				projectConn.close();
+			}
+		});
 
-			inConn.on("error", err => {
-				lastError = err;
-				this.opts.logger.logTool("Websocket proxy incoming connection gave error: " + err);
-				inConn.close();
-				outConn.close();
-			});
+		externalConn.on("error", err => {
+			this.opts.logger.logTool("Websocket proxy incoming connection gave error: " + err);
+			lastError = err;
+			externalConn.close();
+			projectConn.close();
+		});
 
-			outConn.on("close", (code, desc) => {
-				inConn.close(code, desc);
-				this.onWebsocketDisconnect.fire({ error: lastError, code, description: desc, from: "server" });
-			});
+		projectConn.on("close", (code, desc) => {
+			// ws does not allow some codes to be passed directly (like 1006)
+			// that's a shame (we can't perfectly mimic target server), but I see logic behind it
+			externalConn.close(code === 1000 || code === 1001? code: 1000, desc);
+			this.onWebsocketDisconnect.fire({ error: lastError, code, description: desc, from: "server" });
+		});
 
-			inConn.on("close", (code, desc) => {
-				outConn.close(code, desc);
-				this.onWebsocketDisconnect.fire({ error: lastError, code, description: desc, from: "client" });
-			});
+		externalConn.on("close", (code, desc) => {
+			projectConn.close(code === 1000 || code === 1001? code: 1000, desc);
+			this.onWebsocketDisconnect.fire({ error: lastError, code, description: desc, from: "client" });
+		});
 
-			let sendTo = (conn: Websocket.connection, msg: Websocket.IMessage) => {
-				if(msg.utf8Data !== undefined){
-					conn.sendUTF(msg.utf8Data, err => {
-						this.opts.logger.logTool("Failed to send utf8 data to websocket: " + err)
-					});
-				} else if(msg.binaryData !== undefined){
-					conn.sendBytes(msg.binaryData, err => {
-						this.opts.logger.logTool("Failed to send binary data to websocket: " + err)
-					});
-				} else {
-					this.opts.logger.logTool("Got websocket message that is not binary nor textual!");
+		let sendTo = (conn: Ws, msg: Ws.Data) => {
+			let errorHandler = (error?: Error) => {
+				if(error){
+					this.opts.logger.logTool("Failed to send data to websocket: " + error)
 				}
 			}
 
-			inConn.on("message", async msg => {
-				await this.onWebsocketMessage.fire({message: msg, from: "client"});
-				sendTo(outConn, msg)
-			});
-			outConn.on("message", async msg => {
-				await this.onWebsocketMessage.fire({message: msg, from: "server"});
-				sendTo(inConn, msg)
-			});
+			if(Array.isArray(msg)){
+				msg.forEach(chunk => conn.send(chunk, errorHandler))
+			} else {
+				conn.send(msg, errorHandler);
+			}
+		}
+
+		externalConn.on("message", async msg => {
+			await this.onWebsocketMessage.fire({data: msg, from: "client"});
+			sendTo(projectConn, msg)
 		});
 
-		client.connect(`ws://localhost:${this.targetHttpPort}${req.resourceURL.pathname}${req.resourceURL.search}`, 'echo-protocol');
+		projectConn.on("message", async msg => {
+			await this.onWebsocketMessage.fire({data: msg, from: "server"});
+			sendTo(externalConn, msg)
+		});
+
+		projectConn.on("open", async () => {
+			connected = true;
+			await this.onWebsocketConnected.fire({ request: req, clientConnection: externalConn, serverConnection: projectConn });
+		});
 
 	}
 	
@@ -182,7 +183,7 @@ export class WrappingHttpProxy {
 		return this.opts.timeout || 180000;
 	}
 
-	private pipeRequests(outResp: http.IncomingMessage, resp: http.ServerResponse): Promise<void> {
+	private pipeRequests(outResp: Http.IncomingMessage, resp: Http.ServerResponse): Promise<void> {
 		return new Promise((ok, bad) => {
 			let code = outResp.statusCode;
 			if(code === undefined) {
@@ -256,7 +257,7 @@ export class WrappingHttpProxy {
 		});
 	}
 
-	private makeRequest(inReq: http.IncomingMessage, preReadBody: Buffer | null): Promise<http.IncomingMessage> {
+	private makeRequest(inReq: Http.IncomingMessage, preReadBody: Buffer | null): Promise<Http.IncomingMessage> {
 		return new Promise((ok, bad) => {
 			try {
 				let parsedUrl = new URL(inReq.url || "", "http://localhost");
@@ -265,7 +266,7 @@ export class WrappingHttpProxy {
 					throw new Error("Could not create proxy request: HTTP port of running project is not assigned.");
 				}
 
-				let options: http.RequestOptions = {
+				let options: Http.RequestOptions = {
 					protocol: parsedUrl.protocol,
 					hostname: "localhost",
 					port: this.targetHttpPort,
@@ -275,7 +276,7 @@ export class WrappingHttpProxy {
 					headers: inReq.headers
 				};
 
-				let outReq = http.request(options, resp => {
+				let outReq = Http.request(options, resp => {
 					ok(resp);
 				});
 
@@ -304,7 +305,7 @@ export class WrappingHttpProxy {
 		})
 	}
 
-	private async handle(inReq: http.IncomingMessage, inResp: http.ServerResponse): Promise<void> {
+	private async handle(inReq: Http.IncomingMessage, inResp: Http.ServerResponse): Promise<void> {
 
 		try {
 			await this.onBeforeHttpRequest.fire();

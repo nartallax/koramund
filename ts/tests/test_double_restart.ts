@@ -24,7 +24,7 @@ test("double restart", assert => withTestProjectCopy(async controller => {
 	summator.onStderr(line => {
 		let portMatch = line.match(/Started on port (\d+)/);
 		if(portMatch){
-			summator.notifyProcessHttpPort(parseInt(portMatch[1]));
+			summator.notifyProjectHttpPort(parseInt(portMatch[1]));
 			summator.notifyLaunched();
 		}
 	});

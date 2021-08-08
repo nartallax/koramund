@@ -45,14 +45,18 @@ export class ProcessController implements Koramund.ProcessController {
 	}
 
 	get state(): Koramund.ProcessRunState {
-		return this.isStopping? "stopping":
+		return !this.proc? "stopped":
+			this.isStopping? "stopping":
 			this.isStarting? "starting":
-			this.proc? "running":
-			"stopped";
+			"running";
 	}
 
 	async notifyLaunchCompleted(): Promise<void> {
-		await this.onLaunchMarkedCompleted.fire();
+		if(this.isStarting){
+			await this.onLaunchMarkedCompleted.fire();
+		} else {
+			this.opts.logger.logTool("Detected completed launch of process, but the process is not starting. Won't do anything.");
+		}
 	}
 
 	private async withWaitLogging<T>(actionName: string, action: () => Promise<T>): Promise<T> {
@@ -77,35 +81,19 @@ export class ProcessController implements Koramund.ProcessController {
 
 	async stop(couldAlreadyBeStoppingOrStopped?: boolean, skipFirstSignal?: NodeJS.Signals): Promise<void>{
 		if(this.isStopping){
-			this.opts.logger.logTool("Stop requested more than one time simultaneously. Will only stop once.")
+			if(!couldAlreadyBeStoppingOrStopped){
+				this.opts.logger.logTool("Stop requested, but the process is already stopping.")
+			}
+			await this.onStop.wait();
 			return;
-		}
-		let state = this.state;
-		this.isStopping = true;
-
-		switch(state){
-			case "stopped":
-				if(!couldAlreadyBeStoppingOrStopped){
-					this.opts.logger.logTool("Stop requested, but no process is running. Won't do anything.");
-				}
-				this.isStopping = false;
-				return;
-			case "starting":
-				await this.onLaunchCompleted.wait();
-				break;
-			case "stopping":
-				if(!couldAlreadyBeStoppingOrStopped){
-					this.opts.logger.logTool("Stop requested, but the process is already stopping.")
-				}
-				await this.onStop.wait();
-				return;
-		}
-
-		const proc = this.proc;
-		if(!proc){
-			this.opts.logger.logTool(`Stop requested, but no process is running in state ${this.state}. Won't do anything.`)
-			this.isStopping = false;
+		} else if(this.isStarting){
+			this.isStopping = true;
+			await this.onLaunchCompleted.wait();
+		} else if(!this.proc) {
+			this.opts.logger.logTool(`Stop requested, but no process is running. Won't do anything.`)
 			return;
+		} else {
+			this.isStopping = true;
 		}
 
 		await this.withWaitLogging("stop", async () => {
@@ -115,11 +103,12 @@ export class ProcessController implements Koramund.ProcessController {
 			let firstAction = shutdownSequence[0];
 			let shouldSkipFirst = !!firstAction && 
 				isSignalShutdownSequenceItem(firstAction) && 
-				firstAction.signal.toUpperCase() === skipFirstSignal?.toUpperCase();
+				firstAction.signal === skipFirstSignal &&
+				process.platform !== "win32";
 			for(let i = shouldSkipFirst? 1: 0; i < shutdownSequence.length; i++){
 				const action = shutdownSequence[i];
 				if(isSignalShutdownSequenceItem(action)){
-					proc.kill(action.signal);
+					this.sendSignal(action.signal);
 				} else if(isWaitShutdownSequenceItem(action)){
 					let timeoutHandle: NodeJS.Timeout | null = null;
 					let timerPromise = new Promise<boolean>(ok => {
@@ -147,21 +136,14 @@ export class ProcessController implements Koramund.ProcessController {
 		if(this.isStarting){
 			this.opts.logger.logTool("Requested start more than once simultaneously. Will only start once.");
 			return await this.onLaunchCompleted.wait();
-		}
-		let state = this.state;
-		this.isStarting = true;
-
-		switch(state){
-			case "running":
-				this.opts.logger.logTool("Start requested, but the process is already running. Won't do anything.")
-				return { type: "already_running" }
-			case "starting": // wtf? how could this even happen
-				this.opts.logger.logTool("Start requested, but the process is already starting. Won't initiate start second time.")
-				return await this.onLaunchCompleted.wait();
-				// clear hasUserInitiatedStart here...? don't know, it's unobvious how this could happen at all
-			case "stopping":
-				await this.onStop.wait();
-				break;
+		} else if(this.isStopping){
+			this.isStarting = true;
+			await this.onStop.wait();
+		} else if(this.proc) {
+			this.opts.logger.logTool("Start requested, but the process is already running. Won't do anything.")
+			return { type: "already_running" }
+		} else {
+			this.isStarting = true;
 		}
 
 		let launchMarkedCompletedPromise = this.onLaunchMarkedCompleted.wait();
@@ -220,6 +202,27 @@ export class ProcessController implements Koramund.ProcessController {
 			}
 			return result;
 		});
+	}
+
+	private sendSignal(signal: NodeJS.Signals): void {
+		let proc = this.proc;
+		if(!proc){
+			throw new Error(`Could not send signal ${signal} to process: no process!`);
+		}
+
+		if(process.platform !== "win32"){
+			proc.kill(signal);
+			return;
+		}
+	
+		if(signal === "SIGINT" || signal === "SIGTERM"){
+			this.opts.shell.runCommand(`taskkill /pid ${proc.pid}`)
+		} else if(signal === "SIGKILL"){
+			proc.kill();
+		} else {
+			this.opts.logger.logTool(`Could not send signal ${signal} on Windows. Will just force-kill the process.`);
+			proc.kill();
+		}
 	}
 
 }
