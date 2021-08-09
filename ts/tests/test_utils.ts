@@ -75,12 +75,16 @@ export function httpReq(args: {port: number, path?: string, body?: string, metho
 			method: args.method || (args.body? "POST": "GET")
 		}, resp => {
 			let data: Buffer[] = [];
-			resp.on("error", bad);
+			resp.on("error", err => {
+				bad(err);
+			});
 			resp.on("data", chunk => data.push(chunk));
-			resp.on("end", () => ok({
-				code: resp.statusCode || -1,
-				body: Buffer.concat(data).toString("utf-8")
-			}))
+			resp.on("end", () => {
+				ok({
+					code: resp.statusCode || -1,
+					body: Buffer.concat(data).toString("utf-8")
+				})
+			})
 		});
 		
 		req.on("error", bad);
@@ -122,10 +126,7 @@ export async function withTestProjectCopy<T>(action: (controller: Koramund.Proje
 	try {
 		return await Promise.resolve(action(controller));
 	} finally {
-		console.error("test shutdown start");
 		await controller.shutdown();
-		console.error("testdir rmrf");
 		await rmRfIgnoreEnoent(testProjectsDirectory);
-		console.error("test shutdown end");
 	}
 }

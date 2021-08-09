@@ -45,9 +45,9 @@ export class ProcessController implements Koramund.ProcessController {
 	}
 
 	get state(): Koramund.ProcessRunState {
-		return !this.proc? "stopped":
-			this.isStopping? "stopping":
+		return this.isStopping? "stopping":
 			this.isStarting? "starting":
+			!this.proc? "stopped":
 			"running";
 	}
 
@@ -80,20 +80,31 @@ export class ProcessController implements Koramund.ProcessController {
 	}
 
 	async stop(couldAlreadyBeStoppingOrStopped?: boolean, skipFirstSignal?: NodeJS.Signals): Promise<void>{
-		if(!this.proc) {
-			if(!couldAlreadyBeStoppingOrStopped){
-				this.opts.logger.logTool(`Stop requested, but no process is running. Won't do anything.`)
-			}
-			return;
-		} else if(this.isStopping){
+		// check order is important
+		if(this.isStopping){
+			// first, if we are already stopping - it's better just wait for the other stop.
+			// .process and .isStarting could have arbitrary values here
+			// because there is at least one other process going on that alters them
 			if(!couldAlreadyBeStoppingOrStopped){
 				this.opts.logger.logTool("Stop requested, but the process is already stopping.")
 			}
 			await this.onStop.wait();
 			return;
 		} else if(this.isStarting){
+			// second, if we are starting - let's wait for start to finish
+			// because you can't finish something that did not start fully
+			// (technically you can, that's just not good thing to do)
 			this.isStopping = true;
 			await this.onLaunchCompleted.wait();
+		} 
+		
+		if(!this.proc) {
+			// third, if we are not starting or stopping, and still have no process - 
+			// it's already stopped, not much to do here
+			if(!couldAlreadyBeStoppingOrStopped){
+				this.opts.logger.logTool(`Stop requested, but no process is running. Won't do anything.`)
+			}
+			return;
 		} else {
 			this.isStopping = true;
 		}
@@ -152,7 +163,7 @@ export class ProcessController implements Koramund.ProcessController {
 		}
 
 		let launchMarkedCompletedPromise = this.onLaunchMarkedCompleted.wait();
-		return await this.withWaitLogging<Koramund.ProjectStartResult>("launch", async () => {
+		let result = await this.withWaitLogging<Koramund.ProjectStartResult>("launch", async () => {
 			if(this.proc){
 				// should not happen really
 				this.opts.logger.logTool("Start requested, but some process is already running in state " + this.state + ". Won't start second time.");
@@ -207,6 +218,8 @@ export class ProcessController implements Koramund.ProcessController {
 			}
 			return result;
 		});
+
+		return result;
 	}
 
 }

@@ -50,7 +50,17 @@ export function createLaunchableProject<P extends Koramund.LaunchableProjectPara
 
 	}
 
-	proj.onShutdown(withSignal => proj.process.stop(true, withSignal));
+	proj.onShutdown(async withSignal => {
+		// when you shutdowning, you really need the process to STOP
+		// hence the cycle
+		// otherwise you can request shutdown when process already shutdowns for restart
+		// and you will just wait for stop, that will be immediately followed by start
+		// which is not what we want here
+		while(proj.process.state !== "stopped"){
+			await proj.process.stop(true, withSignal)
+			withSignal = undefined; // only use signal for the first time
+		}
+	});
 
 	return proj
 

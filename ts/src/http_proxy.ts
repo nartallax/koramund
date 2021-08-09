@@ -36,6 +36,14 @@ export class WrappingHttpProxy {
 			server: this.server
 		})
 		this.wsServer.on("connection", (socket, request) => this.processWebsocketConnection(socket, request));
+
+		this.server.on("error", err => {
+			this.opts.logger.logTool("Proxy HTTP server gave error: " + err.message);
+		})
+
+		this.wsServer.on("error", err => {
+			this.opts.logger.logTool("Proxy websocket server gave error: " + err.message);
+		})
 	}
 
 	async start(): Promise<void> {
@@ -101,7 +109,7 @@ export class WrappingHttpProxy {
 						bad(e);
 					}
 				}
-			})
+			});
 		});
 	}
 
@@ -315,6 +323,10 @@ export class WrappingHttpProxy {
 			inReq.destroy();
 			return;
 		}
+
+		inReq.on("error", err => {
+			this.opts.logger.logTool("Incoming HTTP request error: " + err.message);
+		});
 
 		let bodyCallBuffer = new CallBuffer<Buffer>(() => new Promise((ok, bad) => {
 			let arr: Buffer[] = [];
