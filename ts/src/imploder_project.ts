@@ -3,7 +3,7 @@ import {AsyncEvent, makeAsyncEvent} from "async_event";
 import {BaseProjectInternal} from "base_project";
 import {CallBuffer} from "call_buffer";
 import {isLaunchableProject} from "launchable_project";
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 
 export interface ImploderProjectInternal extends Koramund.ImploderProject {
 	onBuildFinished: AsyncEvent<Koramund.BuildResult>

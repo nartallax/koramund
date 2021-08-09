@@ -2,7 +2,7 @@ import * as Http from "http";
 import {promises as Fs} from "fs";
 import * as Path from "path";
 import {Logger} from "logger";
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 
 export async function expectError<T>(msg: string | null, action: () => T | Promise<T>): Promise<void>{
 	let hadException = false;

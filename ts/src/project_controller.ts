@@ -2,7 +2,7 @@ import {BaseProjectInternal, createBaseProject} from "base_project";
 import {createHttpProxifyableProject, isHttpProxifyableProjectParams} from "http_proxifyable_project";
 import {createImploderProject, isImploderProject, isImploderProjectParams} from "imploder_project";
 import {createLaunchableProject, isLaunchableProject, isLaunchableProjectParams, LaunchableProjectInternal} from "launchable_project";
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 import * as Path from "path";
 
 export class ProjectController implements Koramund.ProjectController {

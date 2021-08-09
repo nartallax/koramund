@@ -1,7 +1,7 @@
 import {BaseProjectInternal} from "base_project";
 import {WrappingHttpProxy} from "http_proxy";
 import {LaunchableProjectInternal} from "launchable_project";
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 
 export type HttpProxifyableProjectInternal = LaunchableProjectInternal & Koramund.HttpProxifyableProject
 

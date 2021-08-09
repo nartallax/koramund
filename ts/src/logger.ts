@@ -1,5 +1,5 @@
 import {makeAsyncEvent} from "async_event";
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 
 export interface LoggerOptions {
 	getProject(): Koramund.BaseProject;

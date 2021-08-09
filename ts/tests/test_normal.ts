@@ -2,7 +2,7 @@ import {test} from "@nartallax/clamsensor";
 import {httpReq, testPath, waitLoggerLine, withTestProjectCopy} from "tests/test_utils";
 import { promises as Fs } from "fs";
 import {isLaunchableProject} from "launchable_project";
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 
 async function defineProjects(controller: Koramund.ProjectController, profile: "dev" | "prod"){
 

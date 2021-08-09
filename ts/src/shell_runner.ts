@@ -2,7 +2,7 @@ import * as ChildProcess from "child_process";
 import {Logger} from "logger";
 import * as Readline from "readline";
 import * as Stream from "stream";
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 
 
 export class ShellRunner implements Koramund.ShellHelper {

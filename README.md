@@ -20,7 +20,7 @@ Multiple versions of typescript/tslib/Imploder for different controlled projects
 
 ## Usage
 
-Before we start - you may want to explore [type definitions](ts/src/types.ts) on your own. They are thoroughly commented and therefore can be used as documentation.
+Before we start - you may want to explore [type definitions](ts/src/koramund.ts) on your own. They are thoroughly commented and therefore can be used as documentation.
 
 ### Project controller
 
@@ -58,7 +58,7 @@ But it is a base for other types of project.
 		workingDirectory: "./project/just_project/"
 	});
 
-Base project has `justProject.shell`, that allows you to easily launch external processes in project workingDirectory, and some other less-useful properties, look it up in [type definitions](ts/src/types.ts).  
+Base project has `justProject.shell`, that allows you to easily launch external processes in project workingDirectory, and some other less-useful properties, look it up in [type definitions](ts/src/koramund.ts).  
 
 #### Launchable project
 
@@ -90,7 +90,7 @@ This is the project that could be launched. Note that it does not imply that you
 
 Launchable projects has `start()`, `stop()` and `restart()` methods, self-explanatory.  
 Also it has `notifyLaunched()` method. Thing is, project is not really launched at the moment of process start; most of the time project need to do some startup actions, like launch an HTTP server, connect to DB, whatever else; and by calling this method we can notify the project that it is fully started.  
-They also have events! Remember to look them up in [type definitions](ts/src/types.ts). Or look below for examples.  
+They also have events! Remember to look them up in [type definitions](ts/src/koramund.ts). Or look below for examples.  
 
 #### HTTP proxifyable project
 

@@ -1,6 +1,6 @@
 import {BaseProjectInternal} from "base_project";
 import {ProcessController} from "process_controller";
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 
 export interface LaunchableProjectInternal extends Koramund.LaunchableProject {
 	process: ProcessController

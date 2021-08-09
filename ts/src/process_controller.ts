@@ -3,7 +3,7 @@ import {Logger} from "logger";
 import {arrayOfMaybeArray, isSignalShutdownSequenceItem, isWaitShutdownSequenceItem} from "utils";
 import {makeAsyncEvent} from "async_event";
 import {ShellRunner} from "shell_runner";
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 
 export interface ProcessOptions {
 	readonly shell: ShellRunner;

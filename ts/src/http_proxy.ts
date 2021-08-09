@@ -1,7 +1,7 @@
 import * as Http from "http";
 import * as Ws from "ws";
 import {Logger} from "logger";
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 import {CallBuffer} from "call_buffer";
 import {makeAsyncEvent} from "async_event";
 

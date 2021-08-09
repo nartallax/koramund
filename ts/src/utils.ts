@@ -1,4 +1,4 @@
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 
 export function errorAndExit(msg: string): never {
 	console.error(msg);

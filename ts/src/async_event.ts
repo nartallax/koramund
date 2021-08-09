@@ -1,4 +1,4 @@
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 
 export interface AsyncEvent<T = void> extends Koramund.AsyncEvent<T>{
 	listen(handler: (value: T) => void | Promise<void>): void;

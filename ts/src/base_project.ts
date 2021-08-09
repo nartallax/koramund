@@ -1,7 +1,7 @@
 import {AsyncEvent, makeAsyncEvent} from "async_event";
 import {Logger} from "logger";
 import {ShellRunner} from "shell_runner";
-import {Koramund} from "types";
+import {Koramund} from "koramund";
 
 export interface BaseProjectInternal<P extends Koramund.BaseProjectParams = Koramund.BaseProjectParams> extends Koramund.BaseProject<P> {
 	logger: Logger;

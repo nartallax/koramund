@@ -5,11 +5,11 @@
     ],
 
     "imploderConfig": {
-        "entryModule": "ts/src/tool_main.ts",
+        "entryModule": "ts/src/koramund.ts",
         "entryFunction": "main",
         "outFile": "target/koramund.js",
         "target": "es2018",
-        "moduleBlacklistRegexp": ["^(?:/ts)?/tests/.*?$"],
+        "moduleBlacklistRegexp": ["^(?:/ts)?/?tests/.*?$", "^/?test_projects/.*?$"],
         "profiles": {
             "test": {
                 "moduleBlacklistRegexp": [],
