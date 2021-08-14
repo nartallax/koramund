@@ -1,13 +1,10 @@
 {
   "name": "@nartallax/koramund",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "A tool to organise development process of Typescript projects",
   "main": "koramund.js",
   "author": "Nartallax",
   "license": "0BSD",
-  "bin": {
-    "koramund": "koramund.js"
-  },
   "bugs": "https://github.com/nartallax/koramund/issues",
   "repository": "github:nartallax/koramund",
   "scripts": {
