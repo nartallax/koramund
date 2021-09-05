@@ -6,7 +6,6 @@
 
     "imploderConfig": {
         "entryModule": "ts/src/koramund.ts",
-        "entryFunction": "main",
         "outFile": "target/koramund.js",
         "target": "es2018",
         "moduleBlacklistRegexp": ["^(?:/ts)?/?tests/.*?$", "^/?test_projects/.*?$"],
