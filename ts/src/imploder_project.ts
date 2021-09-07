@@ -38,17 +38,19 @@ export function createImploderProject<P extends Koramund.ImploderProjectParams>(
 			return result;
 		},
 
+		getOrStartImploder(): Promise<Imploder.Context> {
+			return imploderStorage.get();
+		},
+
 		async build(): Promise<Koramund.BuildResult>{
-			let imploder: Imploder.Context;
-			if(imploderStorage.hasValue()){
-				imploder = imploderStorage.getValue();
+			let imploderWasLaunched = imploderStorage.hasValue();
+			let imploder = await imploderStorage.get();
+			if(imploderWasLaunched){
 				if(!imploder.config.watchMode){
 					await imploder.compiler.run();
 				} else {
 					await imploder.compiler.waitBuildEnd();
 				}
-			} else {
-				imploder = await imploderStorage.get();
 			}
 
 			if(!imploder.compiler.lastBuildWasSuccessful){

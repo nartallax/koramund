@@ -98,7 +98,11 @@ export namespace Koramund {
 		/** Same as imploderOrNull; throws on null */
 		getImploder(): Imploder.Context;
 
-		/** Build project.
+		/** Starts the Imploder, if not yet.
+		 * Note that this won't guarantee that compiler is completely started, or a build is completed - lazyStart Imploder flag can do that */
+		getOrStartImploder(): Promise<Imploder.Context>;
+
+		/** Build project. Also starts imploder if not yet.
 		 * Is invoked implicitly before project restarts, if the project is also launchable.
 		 * After that imploder is guaranteed to be started. */
 		build(): Promise<BuildResult>
