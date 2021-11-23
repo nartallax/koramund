@@ -4,6 +4,7 @@ import {Logger} from "logger";
 import {Koramund} from "koramund";
 import {CallBuffer} from "call_buffer";
 import {makeAsyncEvent} from "async_event";
+import {errMessage} from "utils";
 
 export interface WrappingHttpProxyOptions {
 	logger: Logger;
@@ -69,7 +70,9 @@ export class WrappingHttpProxy {
 					await this.startPromise.fire();
 					ok();
 				} catch(e){
-					this.startPromise.throw(e);
+					if(e instanceof Error){
+						this.startPromise.throw(e);
+					}
 					bad(e);
 				}
 			});
@@ -105,7 +108,9 @@ export class WrappingHttpProxy {
 						await this.stopPromise.fire();
 						ok()
 					} catch(e){
-						this.stopPromise.throw(e);
+						if(e instanceof Error){
+							this.stopPromise.throw(e);
+						}
 						bad(e);
 					}
 				}
@@ -307,7 +312,9 @@ export class WrappingHttpProxy {
 					});
 				}
 			} catch(e) {
-				inReq.destroy(e);
+				if(e instanceof Error){
+					inReq.destroy(e);
+				}
 				bad(e)
 			}
 		})
@@ -318,7 +325,7 @@ export class WrappingHttpProxy {
 		try {
 			await this.onBeforeHttpRequest.fire();
 		} catch(e){
-			this.opts.logger.logTool("HTTP request could not be delivered: " + e.message);
+			this.opts.logger.logTool("HTTP request could not be delivered: " + errMessage(e));
 			inResp.destroy();
 			inReq.destroy();
 			return;
@@ -359,9 +366,12 @@ export class WrappingHttpProxy {
 			let outResp = await this.makeRequest(inReq, preReadBody);
 			await this.pipeRequests(outResp, inResp);
 		} catch(e){
-			this.opts.logger.logTool(`Error handling HTTP ${method} to ${url}: ` + e.message);
-			if(!inReq.destroyed){
+			this.opts.logger.logTool(`Error handling HTTP ${method} to ${url}: ` + errMessage(e));
+			if(e instanceof Error){
 				inReq.destroy(e);
+				// почему-то дестрой самого реквеста не приводит к дестрою сокета
+				// возможно, так и надо..? неочевидное поведение
+				inReq.socket.destroy(e);
 			}
 		}
 	}

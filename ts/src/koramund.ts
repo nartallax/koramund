@@ -14,6 +14,8 @@ export namespace Koramund {
 		log: (opts: LoggingLineOptions) => void;
 		/** If true, controller won't attempt to handle signals received by the tool process instance */
 		preventSignalHandling?: boolean;
+		/** For debugging purposes */
+		verboseLogging?: boolean;
 	}
 	
 	/** An initial entrypoint for any action in framework */
@@ -202,7 +204,7 @@ export namespace Koramund {
 	export interface LoggingLineOptions {
 		/** Where does this message comes from - from stdio of the project, or from the tool itself? */
 		readonly source: LoggingLineSource; 
-		readonly project: BaseProject;
+		readonly project: BaseProject | null;
 		/** White-padded project name to make outputs more beautiful */
 		readonly paddedProjectName: string;
 		/** Longest name length among active projects */

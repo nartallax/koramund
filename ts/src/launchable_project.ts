@@ -30,10 +30,12 @@ export function createLaunchableProject<P extends Koramund.LaunchableProjectPara
 		onStdout: procController.onStdout,
 
 		async stop(withSignal?: NodeJS.Signals): Promise<void> {
+			base.logger.logDebug("Stop requested, signal = " + withSignal)
 			await this.process.stop(false, withSignal);
 		},
 
 		async restart(): Promise<void>{
+			base.logger.logDebug("Restart requested")
 			await Promise.all([
 				this.process.stop(true),
 				this.start()
@@ -41,10 +43,12 @@ export function createLaunchableProject<P extends Koramund.LaunchableProjectPara
 		},
 	
 		async start(): Promise<Koramund.ProjectStartResult>{
+			base.logger.logDebug("Start requested")
 			return await this.process.start();
 		},
 
 		async notifyLaunched(): Promise<void>{
+			base.logger.logDebug("Launch end notification received")
 			await this.process.notifyLaunchCompleted();
 		}
 

@@ -2,7 +2,8 @@ import {makeAsyncEvent} from "async_event";
 import {Koramund} from "koramund";
 
 export interface LoggerOptions {
-	getProject(): Koramund.BaseProject;
+	getProject(): Koramund.BaseProject | null;
+	logDebug?: boolean;
 	readonly log: (opts: Koramund.LoggingLineOptions) => void;
 }
 
@@ -13,14 +14,15 @@ export class Logger {
 	
 	constructor(private readonly opts: LoggerOptions){
 		this.vals = {
-			get project(): Koramund.BaseProject { return opts.getProject() },
+			get project(): Koramund.BaseProject | null { return opts.getProject() },
 			maxNameLength: 0,
 			paddedName: "<not set yet>" // should not matter really
 		}
 	}
 
 	setNameLength(len: number): void {
-		this.vals.paddedName = this.vals.project.name.trim().padEnd(len, " ");
+		let project = this.vals.project;
+		this.vals.paddedName = (project?.name ?? "").trim().padEnd(len, " ");
 		this.vals.maxNameLength = len;
 	}
 
@@ -30,6 +32,12 @@ export class Logger {
 
 		if(this.onLine.listenersCount > 0){
 			this.onLine.fire(lineOpts);
+		}
+	}
+
+	logDebug(message: string): void {
+		if(this.opts.logDebug){
+			this.log(message, "tool");
 		}
 	}
 
@@ -47,7 +55,7 @@ export class Logger {
 }
 
 interface LoggingLineCommonValues {
-	project: Koramund.BaseProject;
+	project: Koramund.BaseProject | null;
 	maxNameLength: number;
 	paddedName: string;
 }
@@ -80,7 +88,7 @@ class LoggingLineOptionsImpl implements Koramund.LoggingLineOptions {
 		return this.vals.maxNameLength;
 	}
 
-	get project(): Koramund.BaseProject {
+	get project(): Koramund.BaseProject | null {
 		return this.vals.project
 	}
 }

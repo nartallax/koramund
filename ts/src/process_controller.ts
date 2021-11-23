@@ -1,6 +1,6 @@
 import * as ChildProcess from "child_process";
 import {Logger} from "logger";
-import {arrayOfMaybeArray, isSignalShutdownSequenceItem, isWaitShutdownSequenceItem} from "utils";
+import {arrayOfMaybeArray, errMessage, isSignalShutdownSequenceItem, isWaitShutdownSequenceItem} from "utils";
 import {makeAsyncEvent} from "async_event";
 import {ShellRunner} from "shell_runner";
 import {Koramund} from "koramund";
@@ -174,7 +174,7 @@ export class ProcessController implements Koramund.ProcessController {
 			try {
 				await this.onBeforeStart.fire();
 			} catch(e){
-				this.opts.logger.logTool("Could not start process: " + (e.message || e))
+				this.opts.logger.logTool("Could not start process: " + errMessage(e))
 				this.isStarting = false;
 				return {type: "invalid_state"};
 			}
@@ -200,10 +200,12 @@ export class ProcessController implements Koramund.ProcessController {
 					if(!expected){
 						this.opts.logger.logTool("Process unexpectedly " + (signal? "stopped with signal " + signal: "exited with code " + code));
 					}
+					this.opts.logger.logDebug("Process stopped, signal = " + signal + ", code = " + code)
 					this.onStop.fire({ code, signal, expected });
 				}
 			});
 
+			this.opts.logger.logDebug("Process created")
 			await this.onProcessCreated.fire({process: this.proc});
 
 			await Promise.race([

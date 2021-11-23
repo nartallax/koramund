@@ -39,3 +39,7 @@ export function earlyExital(totalSleepTime: number, isDone: () => boolean, inter
 		check();
 	});
 }
+
+export function errMessage(e: unknown): string {
+	return e instanceof Error? e.message || (e + ""): typeof(e) === "symbol"? e.toString(): e + ""
+}

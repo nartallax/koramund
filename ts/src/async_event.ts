@@ -50,7 +50,9 @@ export function makeAsyncEvent<T = void>(): AsyncEvent<T>{
 			try {
 				await Promise.resolve(handler.fn(arg));
 			} catch(e){
-				errors.push(e);
+				if(e instanceof Error){
+					errors.push(e);
+				}
 			}
 		}
 

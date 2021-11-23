@@ -68,7 +68,8 @@ export function createImploderProject<P extends Koramund.ImploderProjectParams>(
 
 	proj.onShutdown(async () => {
 		if(imploderStorage.hasValue()){
-			await Promise.resolve(imploderStorage.getValue().compiler.stop());
+			base.logger.logDebug("Stopping Imploder.");
+			await Promise.resolve(imploderStorage.getValue().stopEverything());
 		}
 	});
 

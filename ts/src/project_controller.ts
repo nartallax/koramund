@@ -4,15 +4,24 @@ import {createImploderProject, isImploderProject, isImploderProjectParams} from 
 import {createLaunchableProject, isLaunchableProject, isLaunchableProjectParams, LaunchableProjectInternal} from "launchable_project";
 import {Koramund} from "koramund";
 import * as Path from "path";
+import {errMessage} from "utils";
+import {Logger} from "logger";
 
 export class ProjectController implements Koramund.ProjectController {
 	
+	private logger: Logger;
 	private projects: BaseProjectInternal<Koramund.BaseProjectParams>[] = [];
 
 	constructor(private readonly opts: Koramund.ProjectControllerOptions){
 		if(!opts.preventSignalHandling){
 			this.setupSignalHandling();
 		}
+
+		this.logger = new Logger({
+			getProject: () => null,
+			log: opts.log,
+			logDebug: opts.verboseLogging
+		})
 
 		this.setupProcessExitNotice();
 	}
@@ -35,6 +44,7 @@ export class ProjectController implements Koramund.ProjectController {
 	}
 
 	private onExit = (signal?: NodeJS.Signals) => {
+		this.logger.logDebug("Exiting (signal = " + signal + ")");
 		this.shutdown(signal);
 	}
 	
@@ -66,6 +76,7 @@ export class ProjectController implements Koramund.ProjectController {
 	}
 
 	shutdownRough(): Promise<void> {
+		this.logger.logDebug("Rough shutdown requested")
 		return this.shutdownInternal(proj => {
 			if(isLaunchableProject(proj)){
 				proj.process.stopImmediatelyAndRough();
@@ -75,18 +86,22 @@ export class ProjectController implements Koramund.ProjectController {
 	}
 
 	shutdown(signal?: NodeJS.Signals): Promise<void> {
+		this.logger.logDebug("Shutdown requested (signal = " + signal + ")")
 		return this.shutdownInternal(proj => proj.shutdown(signal))
 	}
 
 	private async shutdownInternal(action: (proj: BaseProjectInternal) => Promise<void>): Promise<void> {
+		this.logger.logDebug("Shutting down.")
 		if(!this.opts.preventSignalHandling){
 			this.clearSignalHandling();
 		}
 		await Promise.all(this.projects.map(async project => {
 			try {
+				project.logger.logDebug("Shutdown action requested.");
 				await action(project);
+				project.logger.logDebug("Shutdown action completed.");
 			} catch(e){
-				project.logger.logTool("Failed to shutdown gracefully: " + e.message);
+				project.logger.logTool("Failed to shutdown gracefully: " + errMessage(e));
 			}
 		}));
 	}
@@ -131,6 +146,7 @@ export class ProjectController implements Koramund.ProjectController {
 		this.projects.forEach(project => {
 			project.logger.setNameLength(maxLength);
 		})
+		this.logger.setNameLength(maxLength);
 	}
 
 }

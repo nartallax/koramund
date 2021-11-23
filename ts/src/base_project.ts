@@ -16,7 +16,8 @@ export function createBaseProject<P extends Koramund.BaseProjectParams>(params: 
 
 	let logger = new Logger({
 		log: controllerParams.log,
-		getProject(){ return proj }
+		getProject(){ return proj },
+		logDebug: controllerParams.verboseLogging
 	})
 
 	let proj: BaseProjectInternal<P> = {

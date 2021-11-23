@@ -3,6 +3,7 @@ import {promises as Fs} from "fs";
 import * as Path from "path";
 import {Logger} from "logger";
 import {Koramund} from "koramund";
+import {errMessage} from "utils";
 
 export async function expectError<T>(msg: string | null, action: () => T | Promise<T>): Promise<void>{
 	let hadException = false;
@@ -10,8 +11,9 @@ export async function expectError<T>(msg: string | null, action: () => T | Promi
 		await Promise.resolve(action());
 	} catch(e){
 		hadException = true;
-		if(msg !== null && e.message !== msg){
-			throw new Error(`Expected action to throw error "${msg}", but got "${e.message}" instead.`);
+		let errMsg = errMessage(e);
+		if(msg !== null && errMsg !== msg){
+			throw new Error(`Expected action to throw error "${msg}", but got "${errMsg}" instead.`);
 		}
 	}
 
@@ -37,7 +39,7 @@ async function rmRfIgnoreEnoent(rootPath: string): Promise<void>{
 	try {
 		await rmRf(rootPath);
 	} catch(e){
-		if(e.code !== "ENOENT"){
+		if((e as Error & {code: string}).code !== "ENOENT"){
 			throw e;
 		}
 	}
@@ -47,7 +49,7 @@ async function mkdirIgnoreEexist(dirPath: string): Promise<void>{
 	try {
 		await Fs.mkdir(dirPath);
 	} catch(e){
-		if(e.code !== "EEXIST"){
+		if((e as Error & {code: string}).code !== "EEXIST"){
 			throw e;
 		}
 	}
