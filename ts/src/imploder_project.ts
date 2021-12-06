@@ -45,7 +45,10 @@ export function createImploderProject<P extends Koramund.ImploderProjectParams>(
 		async build(): Promise<Koramund.BuildResult>{
 			let imploderWasLaunched = imploderStorage.hasValue();
 			let imploder = await imploderStorage.get();
-			if(imploderWasLaunched){
+
+			if(imploder.config.lazyStart && !imploder.compiler.isStarted){
+				await imploder.compiler.run();
+			} else if(imploderWasLaunched){
 				if(!imploder.config.watchMode){
 					await imploder.compiler.run();
 				} else {

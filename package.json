@@ -1,6 +1,6 @@
 {
   "name": "@nartallax/koramund",
-  "version": "2.0.5",
+  "version": "2.0.6",
   "description": "A tool to organise development process of Typescript projects",
   "main": "koramund.js",
   "author": "Nartallax",
@@ -13,7 +13,7 @@
     "pub": "scripts/publish.sh"
   },
   "dependencies": {
-    "@nartallax/imploder": "^1.1.12",
+    "@nartallax/imploder": "^1.1.14",
     "ws": "^8.0.0"
   },
   "devDependencies": {
