@@ -4,7 +4,6 @@ import {createImploderProject, isImploderProject, isImploderProjectParams} from 
 import {createLaunchableProject, isLaunchableProject, isLaunchableProjectParams, LaunchableProjectInternal} from "launchable_project";
 import {Koramund} from "koramund";
 import * as Path from "path";
-import {errMessage} from "utils";
 import {Logger} from "logger";
 
 export class ProjectController implements Koramund.ProjectController {
@@ -101,7 +100,7 @@ export class ProjectController implements Koramund.ProjectController {
 				await action(project);
 				project.logger.logDebug("Shutdown action completed.");
 			} catch(e){
-				project.logger.logTool("Failed to shutdown gracefully: " + errMessage(e));
+				project.logger.logTool("Failed to shutdown gracefully: ", e);
 			}
 		}));
 	}

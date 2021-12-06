@@ -1,5 +1,6 @@
 import {makeAsyncEvent} from "async_event";
 import {Koramund} from "koramund";
+import {errMessage} from "utils";
 
 export interface LoggerOptions {
 	getProject(): Koramund.BaseProject | null;
@@ -41,7 +42,12 @@ export class Logger {
 		}
 	}
 
-	logTool(message: string): void {
+	logTool(message: string): void;
+	logTool(message: string, error: unknown): void;
+	logTool(message: string, error?: unknown): void {
+		if(error !== undefined){
+			message += errMessage(error, this.opts.logDebug);
+		}
 		this.log(message, "tool")
 	}
 

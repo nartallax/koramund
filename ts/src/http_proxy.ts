@@ -4,7 +4,6 @@ import {Logger} from "logger";
 import {Koramund} from "koramund";
 import {CallBuffer} from "call_buffer";
 import {makeAsyncEvent} from "async_event";
-import {errMessage} from "utils";
 
 export interface WrappingHttpProxyOptions {
 	logger: Logger;
@@ -325,7 +324,7 @@ export class WrappingHttpProxy {
 		try {
 			await this.onBeforeHttpRequest.fire();
 		} catch(e){
-			this.opts.logger.logTool("HTTP request could not be delivered: " + errMessage(e));
+			this.opts.logger.logTool("HTTP request could not be delivered: ", e);
 			inResp.destroy();
 			inReq.destroy();
 			return;
@@ -366,7 +365,7 @@ export class WrappingHttpProxy {
 			let outResp = await this.makeRequest(inReq, preReadBody);
 			await this.pipeRequests(outResp, inResp);
 		} catch(e){
-			this.opts.logger.logTool(`Error handling HTTP ${method} to ${url}: ` + errMessage(e));
+			this.opts.logger.logTool(`Error handling HTTP ${method} to ${url}: `, e);
 			if(e instanceof Error){
 				inReq.destroy(e);
 				// почему-то дестрой самого реквеста не приводит к дестрою сокета

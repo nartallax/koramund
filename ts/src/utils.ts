@@ -40,6 +40,10 @@ export function earlyExital(totalSleepTime: number, isDone: () => boolean, inter
 	});
 }
 
-export function errMessage(e: unknown): string {
-	return e instanceof Error? e.message || (e + ""): typeof(e) === "symbol"? e.toString(): e + ""
+export function errMessage(e: unknown, stack?: boolean): string {
+	if(!(e instanceof Error)){
+		return typeof(e) === "symbol"? e.toString(): e + "";
+	}
+
+	return (stack? e.stack: "") || e.message || (e + "");
 }
