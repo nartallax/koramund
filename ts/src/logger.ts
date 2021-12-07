@@ -42,8 +42,6 @@ export class Logger {
 		}
 	}
 
-	logTool(message: string): void;
-	logTool(message: string, error: unknown): void;
 	logTool(message: string, error?: unknown): void {
 		if(error !== undefined){
 			message += errMessage(error, this.opts.logDebug);

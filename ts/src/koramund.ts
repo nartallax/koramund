@@ -194,7 +194,7 @@ export namespace Koramund {
 	}
 
 	export interface Logger {
-		logTool(message: string): void;
+		logTool(message: string, error?: unknown): void;
 		logStderr(message: string): void;
 		logStdout(message: string): void;
 	}
