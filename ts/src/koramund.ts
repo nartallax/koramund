@@ -1,8 +1,8 @@
 import * as Http from "http";
 import * as Ws from "ws";
 import * as ChildProcess from "child_process";
-import {Imploder} from "@nartallax/imploder";
 import {ProjectController} from "project_controller";
+import {Imploder} from "@nartallax/imploder";
 
 export namespace Koramund {
 
@@ -93,16 +93,11 @@ export namespace Koramund {
 
 	/** A project buildable with Imploder. */
 	export interface ImploderProject<P extends ImploderProjectParams = ImploderProjectParams> extends BaseProject<P> {
-		/** Imploder context of the project. Null means not started yet
-		 * Note that non-null answer only possible if Imploder is in watch mode. One-time run Imploder instances are not stored. */
-		getImploderOrNull(): Imploder.Context | null;
+		/** Starts Imploder if current profile allows it to start in watch mode */
+		startImploderInWatchMode(): Promise<void>;
 
-		/** Same as imploderOrNull; throws on null */
-		getImploder(): Imploder.Context;
-
-		/** Starts the Imploder, if not yet.
-		 * Note that this won't guarantee that compiler is completely started, or a build is completed - lazyStart Imploder flag can do that */
-		getOrStartImploder(): Promise<Imploder.Context>;
+		readonly imploderConfig: Imploder.Config;
+		readonly imploderStartedInWatchMode: boolean;
 
 		/** Build project. Also starts imploder if not yet.
 		 * Is invoked implicitly before project restarts, if the project is also launchable.

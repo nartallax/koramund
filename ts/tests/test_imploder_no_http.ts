@@ -10,7 +10,7 @@ test("imploder no http", assert => withTestProjectCopy(async controller => {
 		imploderTsconfigPath: testPath("summator/tsconfig.json"),
 		imploderProfile: "dev",
 		getLaunchCommand: (): string[] => {
-			return [controller.nodePath, summator.getImploder().config.outFile, prefix]
+			return [controller.nodePath, summator.imploderConfig.outFile, prefix]
 		},
 		shutdownSequence: [
 			{signal: "SIGUSR1"},

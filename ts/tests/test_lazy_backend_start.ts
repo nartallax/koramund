@@ -13,7 +13,7 @@ test("lazy http start", assert => withTestProjectCopy(async controller => {
 		imploderTsconfigPath: testPath("summator/tsconfig.json"),
 		imploderProfile: "dev",
 		getLaunchCommand: (): string[] => {
-			return [controller.nodePath, summator.getImploder().config.outFile, prefix]
+			return [controller.nodePath, summator.imploderConfig.outFile, prefix]
 		},
 		proxyHttpPort: port,
 		shutdownSequence: [
@@ -70,7 +70,7 @@ test("lazy imploder start with lazy http start", assert => withTestProjectCopy(a
 		imploderTsconfigPath: testPath("summator/tsconfig.json"),
 		imploderProfile: "dev",
 		getLaunchCommand: (): string[] => {
-			return [controller.nodePath, summator.getImploder().config.outFile, prefix]
+			return [controller.nodePath, summator.imploderConfig.outFile, prefix]
 		},
 		proxyHttpPort: port,
 		shutdownSequence: [
@@ -89,7 +89,7 @@ test("lazy imploder start with lazy http start", assert => withTestProjectCopy(a
 	});
 
 	assert(summator.process.state).equalsTo("stopped");
-	await summator.getOrStartImploder();
+	await summator.startImploderInWatchMode();
 	await summator.startHttpProxy();
 	assert(summator.process.state).equalsTo("stopped");
 

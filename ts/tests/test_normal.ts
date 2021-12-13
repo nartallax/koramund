@@ -11,7 +11,7 @@ async function defineProjects(controller: Koramund.ProjectController, profile: "
 		imploderTsconfigPath: testPath("./summator/tsconfig.json"),
 		imploderProfile: profile,
 		getLaunchCommand: (): string[] => {
-			return [controller.nodePath, summator.getImploder().config.outFile, "Result: "]
+			return [controller.nodePath, summator.imploderConfig.outFile, "Result: "]
 		},
 		proxyHttpPort: JSON.parse((await Fs.readFile(testPath("summator/summator_config.json"), "utf-8"))).http.api_endpoint.port
 	});
@@ -67,7 +67,7 @@ test("normal", assert => withTestProjectCopy(async controller => {
 		let resp = await httpReq({port: summator.params.proxyHttpPort, body: JSON.stringify({a: 5, b: 10}), path: "/sum"})
 		assert(resp.body).equalsTo(expected);
 		assert(summator.process.state).equalsTo("running");
-		assert(summator.getImploderOrNull).isTruthy();
+		assert(summator.imploderStartedInWatchMode).isTruthy();
 	}
 
 	let {summator, hashgen, front} = await defineProjects(controller, "dev");
@@ -135,15 +135,15 @@ test("normal", assert => withTestProjectCopy(async controller => {
 	}
 
 	await front.build();
-	assert(front.getImploderOrNull()).isTruthy();
-	let bundle = await Fs.readFile(front.getImploder().config.outFile, "utf-8");
+	assert(front.imploderStartedInWatchMode).isTruthy();
+	let bundle = await Fs.readFile(front.imploderConfig.outFile, "utf-8");
 	assert(bundle).contains("function");
 
 	assert(summator.process.state).equalsTo("stopped");
-	assert(summator.getImploderOrNull()).isFalsy();
+	assert(summator.imploderStartedInWatchMode).isFalsy();
 	await summator.start();
 	assert(summator.process.state).equalsTo("running");
-	assert(summator.getImploderOrNull()).isTruthy();
+	assert(summator.imploderStartedInWatchMode).isTruthy();
 
 	await callSummatorAndCheck("Result: 15!!!");
 
@@ -163,13 +163,13 @@ test("normal", assert => withTestProjectCopy(async controller => {
 	//console.log(res.body);
 	await assert(httpReq({port: summator.params.proxyHttpPort, path: "/restart?a=b", method: "DELETE"})).throws("socket hang up")
 	assert(summator.process.state).equalsTo("stopped");
-	assert(summator.getImploderOrNull()).isTruthy();
+	assert(summator.imploderStartedInWatchMode).isTruthy();
 	await assert(callSummatorAndCheck("Result: 15???")).throws("socket hang up");
 
 	// project should return back to normal running state once error is fixed
 	await Fs.writeFile(testPath("summator/summator_consts.ts"), `export const postfix: string = "...";`);
 	assert(summator.process.state).equalsTo("stopped");
-	assert(summator.getImploderOrNull()).isTruthy();
+	assert(summator.imploderStartedInWatchMode).isTruthy();
 	await callSummatorAndCheck("Result: 15...");
 
 	// restarts proxy condition without method condition should work

@@ -13,7 +13,7 @@ test("imploder single run", assert => withTestProjectCopy(async controller => {
 		imploderTsconfigPath: testPath("summator/tsconfig.json"),
 		imploderProfile: "prod",
 		getLaunchCommand: (): string[] => {
-			return [controller.nodePath, summator.getImploder().config.outFile, prefix]
+			return [controller.nodePath, summator.imploderConfig.outFile, prefix]
 		},
 		proxyHttpPort: port,
 		shutdownSequence: [

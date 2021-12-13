@@ -8,7 +8,7 @@ import {Logger} from "logger";
 
 export class ProjectController implements Koramund.ProjectController {
 	
-	private logger: Logger;
+	readonly logger: Logger;
 	private projects: BaseProjectInternal<Koramund.BaseProjectParams>[] = [];
 
 	constructor(private readonly opts: Koramund.ProjectControllerOptions){
@@ -61,7 +61,7 @@ export class ProjectController implements Koramund.ProjectController {
 	}
 
 	get nodePath(): string {
-		return process.argv[0];
+		return process.execPath;
 	}
 
 	async buildAll(): Promise<Koramund.BuildResult[]>{
@@ -126,7 +126,7 @@ export class ProjectController implements Koramund.ProjectController {
 		}
 		
 		if(isImploderProjectParams(params)){
-			baseProject = createImploderProject(baseProject);
+			baseProject = createImploderProject(baseProject, this);
 		}
 
 		this.projects.push(baseProject);

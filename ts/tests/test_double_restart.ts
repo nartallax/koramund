@@ -11,7 +11,7 @@ test("double restart", assert => withTestProjectCopy(async controller => {
 		imploderTsconfigPath: testPath("summator/tsconfig.json"),
 		imploderProfile: "dev",
 		getLaunchCommand: (): string[] => {
-			return [controller.nodePath, summator.getImploder().config.outFile, "Result: "]
+			return [controller.nodePath, summator.imploderConfig.outFile, "Result: "]
 		},
 		proxyHttpPort: port,
 		shutdownSequence: [

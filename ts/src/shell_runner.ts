@@ -114,4 +114,10 @@ export class ShellRunner implements Koramund.ShellHelper {
 		})
 	}
 
+	waitExitAnyCode(process: ChildProcess.ChildProcess): Promise<{code: number | null, signal: NodeJS.Signals | null}> {
+		return new Promise(ok => {
+			process.on("exit", (code, signal) => ok({code, signal}))
+		});
+	}
+
 }

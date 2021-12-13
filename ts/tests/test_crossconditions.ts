@@ -8,7 +8,7 @@ test("crossconditions", assert => withTestProjectCopy(async controller => {
 		let resp = await httpReq({port: summator.params.proxyHttpPort, body: JSON.stringify({a: 5, b: 10}), path: "/sum"})
 		assert(resp.body).equalsTo(expected);
 		assert(summator.process.state).equalsTo("running");
-		assert(summator.getImploderOrNull()).isTruthy();
+		assert(summator.imploderStartedInWatchMode).isTruthy();
 	}
 
 	let summator = controller.addProject({
@@ -16,7 +16,7 @@ test("crossconditions", assert => withTestProjectCopy(async controller => {
 		imploderTsconfigPath: testPath("summator/tsconfig.json"),
 		imploderProfile: "dev",
 		getLaunchCommand: (): string[] => {
-			return [controller.nodePath, summator.getImploder().config.outFile, "Result: "]
+			return [controller.nodePath, summator.imploderConfig.outFile, "Result: "]
 		},
 		proxyHttpPort: JSON.parse((await Fs.readFile(testPath("summator/summator_config.json"), "utf-8"))).http.api_endpoint.port
 	});
@@ -43,7 +43,7 @@ test("crossconditions", assert => withTestProjectCopy(async controller => {
 		imploderTsconfigPath: testPath("multiplier/tsconfig.json"),
 		imploderProfile: "dev",
 		getLaunchCommand: (): string[] => {
-			return [controller.nodePath, multiplier.getImploder().config.outFile, "Result: "]
+			return [controller.nodePath, multiplier.imploderConfig.outFile, "Result: "]
 		},
 		proxyHttpPort: multiplierPort
 	});
