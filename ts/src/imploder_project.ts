@@ -92,7 +92,7 @@ export function createImploderProject<P extends Koramund.ImploderProjectParams>(
 		base.logger.logDebug("Launching Imploder.");
 
 		let imploderBinPath = Path.resolve(await getNpmBinPath(projCon), "imploder");
-		let launchCommand = [imploderBinPath, "--tsconfig", base.params.imploderTsconfigPath, "--plain-logs", "--stdout-notifications"];
+		let launchCommand = [imploderBinPath, "--tsconfig", Path.resolve(base.params.imploderTsconfigPath), "--plain-logs", "--stdout-notifications"];
 		if(base.params.imploderProfile !== undefined){
 			launchCommand.push("--profile", base.params.imploderProfile)
 		}
