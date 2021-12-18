@@ -1,22 +1,24 @@
-import {AsyncEvent, makeAsyncEvent} from "async_event";
-import {Logger} from "logger";
-import {ShellRunner} from "shell_runner";
-import {Koramund} from "koramund";
+import {AsyncEvent, makeAsyncEvent} from "async_event"
+import {Logger} from "logger"
+import {ShellRunner} from "shell_runner"
+import {Koramund} from "koramund"
 
 export interface BaseProjectInternal<P extends Koramund.BaseProjectParams = Koramund.BaseProjectParams> extends Koramund.BaseProject<P> {
-	logger: Logger;
-	shell: ShellRunner;
-	shutdown(withSignal?: NodeJS.Signals): Promise<void>;
-	onShutdown: AsyncEvent<NodeJS.Signals | undefined>;
+	logger: Logger
+	shell: ShellRunner
+	shutdown(withSignal?: NodeJS.Signals): Promise<void>
+	onShutdown: AsyncEvent<NodeJS.Signals | undefined>
 }
 
 export function createBaseProject<P extends Koramund.BaseProjectParams>(params: P, controllerParams: Koramund.ProjectControllerOptions): BaseProjectInternal<P> {
 
-	let workingDirectory = params.workingDirectory || ".";
+	let workingDirectory = params.workingDirectory || "."
 
 	let logger = new Logger({
 		log: controllerParams.log,
-		getProject(){ return proj },
+		getProject() {
+			return proj
+		},
 		logDebug: controllerParams.verboseLogging
 	})
 
@@ -28,9 +30,9 @@ export function createBaseProject<P extends Koramund.BaseProjectParams>(params: 
 
 		onShutdown: makeAsyncEvent(),
 		async shutdown(withSignal?: NodeJS.Signals): Promise<void> {
-			await this.onShutdown.fire(withSignal);
+			await this.onShutdown.fire(withSignal)
 		}
 	}
 
-	return proj;
+	return proj
 }

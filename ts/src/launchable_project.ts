@@ -1,6 +1,6 @@
-import {BaseProjectInternal} from "base_project";
-import {ProcessController} from "process_controller";
-import {Koramund} from "koramund";
+import {BaseProjectInternal} from "base_project"
+import {ProcessController} from "process_controller"
+import {Koramund} from "koramund"
 
 export interface LaunchableProjectInternal extends Koramund.LaunchableProject {
 	process: ProcessController
@@ -31,25 +31,25 @@ export function createLaunchableProject<P extends Koramund.LaunchableProjectPara
 
 		async stop(withSignal?: NodeJS.Signals): Promise<void> {
 			base.logger.logDebug("Stop requested, signal = " + withSignal)
-			await this.process.stop(false, withSignal);
+			await this.process.stop(false, withSignal)
 		},
 
-		async restart(): Promise<void>{
+		async restart(): Promise<void> {
 			base.logger.logDebug("Restart requested")
 			await Promise.all([
 				this.process.stop(true),
 				this.start()
-			]);
-		},
-	
-		async start(): Promise<Koramund.ProjectStartResult>{
-			base.logger.logDebug("Start requested")
-			return await this.process.start();
+			])
 		},
 
-		async notifyLaunched(): Promise<void>{
+		async start(): Promise<Koramund.ProjectStartResult> {
+			base.logger.logDebug("Start requested")
+			return await this.process.start()
+		},
+
+		async notifyLaunched(): Promise<void> {
 			base.logger.logDebug("Launch end notification received")
-			await this.process.notifyLaunchCompleted();
+			await this.process.notifyLaunchCompleted()
 		}
 
 	}
@@ -62,9 +62,9 @@ export function createLaunchableProject<P extends Koramund.LaunchableProjectPara
 		// which is not what we want here
 		while(proj.process.state !== "stopped"){
 			await proj.process.stop(true, withSignal)
-			withSignal = undefined; // only use signal for the first time
+			withSignal = undefined // only use signal for the first time
 		}
-	});
+	})
 
 	return proj
 
