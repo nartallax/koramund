@@ -14,6 +14,7 @@ module.exports = {
     "**/node_modules/**",
     "**/generated/**",
     "build",
+    "target",
     ".eslintrc.js"
   ],
   rules: {

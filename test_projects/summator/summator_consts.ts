@@ -1,1 +1,1 @@
-export const postfix = "!!!";
+export const postfix = "!!!"
