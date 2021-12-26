@@ -74,6 +74,9 @@ export function createImploderProject<P extends Koramund.ImploderProjectParams>(
 		if(base.params.imploderProfile !== undefined){
 			launchCommand.push("--profile", base.params.imploderProfile)
 		}
+		if(base.params.imploderIdleTimeout !== undefined){
+			launchCommand.push("--idle-timeout", base.params.imploderIdleTimeout + "")
+		}
 
 		imploderProcess = await base.shell.startProcess({
 			command: launchCommand,

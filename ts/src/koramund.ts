@@ -208,6 +208,9 @@ export namespace Koramund {
 		 * Tool will launch Imploder on release build (expects single-time build)
 		 * and before process start/restart (expects watch mode) */
 		readonly imploderProfile?: string
+
+		/** Shutdown compiler after this long inactivity (seconds) */
+		readonly imploderIdleTimeout?: number
 	}
 
 	export interface Logger {
