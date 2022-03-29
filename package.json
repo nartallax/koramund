@@ -1,6 +1,6 @@
 {
   "name": "@nartallax/koramund",
-  "version": "2.2.1",
+  "version": "2.2.2",
   "description": "A tool to organise development process of Typescript projects",
   "main": "koramund.js",
   "author": "Nartallax",

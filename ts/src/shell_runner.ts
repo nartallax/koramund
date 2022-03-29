@@ -56,10 +56,19 @@ export class ShellRunner implements Koramund.ShellHelper {
 		if(opts.command.length < 1){
 			throw new Error("Expected at least one value in process start command.")
 		}
-		let proc = ChildProcess.spawn(opts.command[0], opts.command.slice(1), {
+		let binaryPath = opts.command[0]
+		let cliArgs = opts.command.slice(1)
+		let spawnOpts: ChildProcess.SpawnOptions = {
 			cwd: this.workingDirectory,
 			stdio: ["ignore", opts.onStdout ? "pipe" : "ignore", opts.onStderr ? "pipe" : "ignore"]
-		})
+		}
+
+		if(process.platform === "win32"){
+			spawnOpts.shell = true
+			binaryPath = `"${binaryPath}"` // in case of spaces in path
+		}
+
+		let proc = ChildProcess.spawn(binaryPath, cliArgs, spawnOpts)
 
 		proc.on("error", err => {
 			this.logger.logTool(`Process ${JSON.stringify(opts.command)} gave error: ${err.message}`)
