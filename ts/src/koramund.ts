@@ -15,7 +15,7 @@ export namespace Koramund {
 			logDebug: opts.verboseLogging
 		})
 
-		let nodeEnv = await NodeEnvController.create(logger)
+		let nodeEnv = await NodeEnvController.create()
 
 		return new ProjectController(opts, logger, nodeEnv)
 	}
@@ -60,13 +60,10 @@ export namespace Koramund {
 	export interface NodeEnvironmentController {
 		/** Path to NodeJS executable that was used to start the tool */
 		nodeExecutablePath: string
-		/** Path no npm executable that is bundled with the NodeJS that was used to start the tool */
+		/** Path to npm executable that is bundled with the NodeJS that was used to start the tool */
 		npmExecutablePath: string
-		/** Path to something like ./node_modules/.bin/ */
-		npmBinDirectory: string
-		/** @param execName name of executable file provided by some package
-		 * @returns full path to the executable */
-		getPathToNpmPackageExecutable(execName: string): string
+		/** Path to npx executable that is bundled with the NodeJS that was used to start the tool */
+		npxExecutablePath: string
 	}
 
 	/** Common part of any project */

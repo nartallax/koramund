@@ -1,5 +1,5 @@
 import {test} from "@nartallax/clamsensor"
-import {testPath, withTestProjectCopy} from "tests/test_utils"
+import {sleep, testPath, withTestProjectCopy} from "tests/test_utils"
 import * as Ws from "ws"
 
 test("websocket", assert => withTestProjectCopy(async controller => {
@@ -143,4 +143,5 @@ test("websocket", assert => withTestProjectCopy(async controller => {
 		await assert(startPromise).fasterThan(1000)
 	}
 
+	await sleep(1000)
 }))

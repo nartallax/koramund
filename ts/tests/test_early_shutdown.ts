@@ -1,5 +1,5 @@
 import {test} from "@nartallax/clamsensor"
-import {testPath, waitLoggerLine, withTestProjectCopy} from "tests/test_utils"
+import {sleep, testPath, waitLoggerLine, withTestProjectCopy} from "tests/test_utils"
 
 test("early shutdown", assert => withTestProjectCopy(async controller => {
 	let hashgen = controller.addProject({
@@ -30,4 +30,6 @@ test("early shutdown", assert => withTestProjectCopy(async controller => {
 	assert(hashgen.process.state).equalsTo("running")
 
 	await assert(nextLogPromise).willNotReturnFasterThan(5000)
+
+	await sleep(1000)
 }))

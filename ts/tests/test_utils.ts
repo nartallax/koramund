@@ -22,6 +22,10 @@ export async function expectError<T>(msg: string | null, action: () => T | Promi
 	}
 }
 
+export async function sleep(timeMs: number): Promise<void> {
+	return new Promise(ok => setTimeout(ok, timeMs))
+}
+
 async function rmRf(rootPath: string): Promise<void> {
 	let stat = await Fs.stat(rootPath)
 	if(stat.isDirectory()){

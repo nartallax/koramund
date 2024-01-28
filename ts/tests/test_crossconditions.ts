@@ -1,6 +1,6 @@
 import {test} from "@nartallax/clamsensor"
 import {promises as Fs} from "fs"
-import {httpReq, testPath, withTestProjectCopy} from "tests/test_utils"
+import {httpReq, sleep, testPath, withTestProjectCopy} from "tests/test_utils"
 
 test("crossconditions", assert => withTestProjectCopy(async controller => {
 
@@ -91,4 +91,5 @@ test("crossconditions", assert => withTestProjectCopy(async controller => {
 	let {body: multRes} = await httpReq({port: multiplier.params.proxyHttpPort, path: "/mult", method: "POST", body: JSON.stringify({a: 5, b: 11})})
 	assert(multRes).equalsTo("55")
 
+	await sleep(1000)
 }))

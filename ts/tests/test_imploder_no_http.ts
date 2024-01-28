@@ -1,5 +1,5 @@
 import {test} from "@nartallax/clamsensor"
-import {httpReq, testPath, withTestProjectCopy} from "tests/test_utils"
+import {httpReq, sleep, testPath, withTestProjectCopy} from "tests/test_utils"
 
 test("imploder no http", assert => withTestProjectCopy(async controller => {
 
@@ -39,4 +39,6 @@ test("imploder no http", assert => withTestProjectCopy(async controller => {
 	await summator.restart()
 	let respTwo = await httpReq({port, body: JSON.stringify({a: 1, b: 1}), path: "/sum"})
 	assert(respTwo.body).equalsTo("Result12345: 2!!!")
+
+	await sleep(1000)
 }))

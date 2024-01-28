@@ -1,6 +1,6 @@
 import {test} from "@nartallax/clamsensor"
 import {promises as Fs} from "fs"
-import {httpReq, testPath, withTestProjectCopy} from "tests/test_utils"
+import {httpReq, sleep, testPath, withTestProjectCopy} from "tests/test_utils"
 
 test("http body read", assert => withTestProjectCopy(async controller => {
 
@@ -47,4 +47,6 @@ test("http body read", assert => withTestProjectCopy(async controller => {
 	await assert(startWait).fasterThan(5000)
 	let respTwo = await assert(respTwoPromise).fasterThan(500)
 	assert(respTwo.body).equalsTo("Result: 30!!!")
+
+	await sleep(1000)
 }))

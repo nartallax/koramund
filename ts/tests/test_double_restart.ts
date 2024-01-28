@@ -1,6 +1,6 @@
 import {test} from "@nartallax/clamsensor"
 import {promises as Fs} from "fs"
-import {httpReq, testPath, waitLoggerLine, withTestProjectCopy} from "tests/test_utils"
+import {httpReq, sleep, testPath, waitLoggerLine, withTestProjectCopy} from "tests/test_utils"
 
 test("double restart", assert => withTestProjectCopy(async controller => {
 
@@ -60,4 +60,5 @@ test("double restart", assert => withTestProjectCopy(async controller => {
 		assert(sumTwo.body).equalsTo("Result: 9!!!")
 	}
 
+	await sleep(1000)
 }))

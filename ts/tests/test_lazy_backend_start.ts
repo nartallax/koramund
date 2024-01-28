@@ -1,5 +1,5 @@
 import {test} from "@nartallax/clamsensor"
-import {httpReq, testPath, withTestProjectCopy} from "tests/test_utils"
+import {httpReq, sleep, testPath, withTestProjectCopy} from "tests/test_utils"
 import {promises as Fs} from "fs"
 
 test("lazy http start", assert => withTestProjectCopy(async controller => {
@@ -47,6 +47,8 @@ test("lazy http start", assert => withTestProjectCopy(async controller => {
 	await summator.restart()
 	let respThree = await httpReq({port, body: JSON.stringify({a: 3, b: 3}), path: "/sum"})
 	assert(respThree.body).equalsTo("Result C: 6!!!")
+
+	await sleep(1000)
 }))
 
 
@@ -104,4 +106,6 @@ test("lazy imploder start with lazy http start", assert => withTestProjectCopy(a
 	await summator.restart()
 	let respThree = await httpReq({port, body: JSON.stringify({a: 3, b: 3}), path: "/sum"})
 	assert(respThree.body).equalsTo("Result C: 6!!!")
+
+	await sleep(1000)
 }))

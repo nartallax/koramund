@@ -1,5 +1,5 @@
 import {test} from "@nartallax/clamsensor"
-import {httpReq, testPath, waitLoggerLine, withTestProjectCopy} from "tests/test_utils"
+import {httpReq, sleep, testPath, waitLoggerLine, withTestProjectCopy} from "tests/test_utils"
 import {promises as Fs} from "fs"
 import {isLaunchableProject} from "launchable_project"
 import {Koramund} from "koramund"
@@ -177,6 +177,7 @@ test("normal", assert => withTestProjectCopy(async controller => {
 	await httpReq({port: summator.params.proxyHttpPort, path: "/restart"})
 	await callSummatorAndCheck("Result: 15123")
 
+	await sleep(1000)
 }))
 
 test("build_all", assert => withTestProjectCopy(async controller => {
@@ -185,4 +186,6 @@ test("build_all", assert => withTestProjectCopy(async controller => {
 	let resultJsPath = testPath("summator/result.js")
 	let resultJs = await Fs.readFile(resultJsPath, "utf8")
 	assert(resultJs).contains(".on('end',function(){")
+
+	await sleep(1000)
 }))

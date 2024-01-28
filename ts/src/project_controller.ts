@@ -118,7 +118,7 @@ export class ProjectController implements Koramund.ProjectController {
 		}
 
 		if(isImploderProjectParams(params)){
-			baseProject = createImploderProject(baseProject, this)
+			baseProject = createImploderProject(baseProject)
 		}
 
 		this.projects.push(baseProject)

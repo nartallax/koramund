@@ -3,7 +3,6 @@ import {AsyncEvent, makeAsyncEvent} from "async_event"
 import {BaseProjectInternal} from "base_project"
 import {isLaunchableProject} from "launchable_project"
 import {Koramund} from "koramund"
-import {ProjectController} from "project_controller"
 import * as Path from "path"
 import * as ChildProcess from "child_process"
 
@@ -11,7 +10,7 @@ export interface ImploderProjectInternal extends Koramund.ImploderProject {
 	onBuildFinished: AsyncEvent<Koramund.BuildResult>
 }
 
-export function createImploderProject<P extends Koramund.ImploderProjectParams>(base: BaseProjectInternal<P>, projCon: ProjectController): BaseProjectInternal<P> & ImploderProjectInternal {
+export function createImploderProject<P extends Koramund.ImploderProjectParams>(base: BaseProjectInternal<P>): BaseProjectInternal<P> & ImploderProjectInternal {
 
 	let config = Imploder.parseConfigSync(base.params.imploderTsconfigPath, {
 		profile: base.params.imploderProfile
@@ -69,8 +68,7 @@ export function createImploderProject<P extends Koramund.ImploderProjectParams>(
 		hasRunningImploder = true
 		base.logger.logDebug("Launching Imploder.")
 
-		let imploderBinPath = projCon.nodeEnv.getPathToNpmPackageExecutable("imploder")
-		let launchCommand = [imploderBinPath, "--tsconfig", Path.resolve(base.params.imploderTsconfigPath), "--plain-logs", "--stdout-notifications"]
+		let launchCommand = ["npx", "imploder", "--tsconfig", Path.resolve(base.params.imploderTsconfigPath), "--plain-logs", "--stdout-notifications"]
 		if(base.params.imploderProfile !== undefined){
 			launchCommand.push("--profile", base.params.imploderProfile)
 		}

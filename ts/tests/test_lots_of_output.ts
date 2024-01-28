@@ -1,5 +1,5 @@
 import {test} from "@nartallax/clamsensor"
-import {httpReq, testPath, waitLoggerLine, withTestProjectCopy} from "tests/test_utils"
+import {httpReq, sleep, testPath, waitLoggerLine, withTestProjectCopy} from "tests/test_utils"
 
 test("lots of stdout ignored", assert => withTestProjectCopy(async controller => {
 
@@ -26,4 +26,5 @@ test("lots of stdout ignored", assert => withTestProjectCopy(async controller =>
 	outputter.logger.logTool("Done querying.")
 	await assert(promise).willNotReturnFasterThan(500)
 
+	await sleep(1000)
 }))
